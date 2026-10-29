@@ -8,15 +8,15 @@
   {
    "repo": "appimage-bash",
    "url": "https://github.com/valicm/appimage-bash",
-   "sha": "c205537e31b171a5c8a5553ecdac311a10519ad3",
-   "licence": "MIT (LICENSE file at pin c205537e31b1, GitHub licence API 2026-10-29)",
+   "sha": "a60306485f461de9d60b934558289663904492f1",
+   "licence": "MIT (LICENSE file at pin a60306485f46, GitHub licence API 2026-10-29)",
    "review": {
     "spdx": "MIT",
     "use": "adapt-with-attribution",
     "by": "author-consent",
     "at": "2026-10-28T20:15Z",
     "consent_receipt": "01c176f14c82",
-    "note": "Inclusion consented by the repository owner, signed in with GitHub on hub.xerj.org/add, at 2026-10-28T20:15Z (receipt 01c176f14c82); pinned to the default-branch head. LICENSE file at pin c205537e31b1 detected as MIT by the GitHub licence API on 2026-10-29; used under that licence with attribution."
+    "note": "Inclusion consented by the repository owner, signed in with GitHub on hub.xerj.org/add, at 2026-10-28T20:15Z (receipt 01c176f14c82); pinned to the default-branch head. LICENSE file at pin a60306485f46 detected as MIT by the GitHub licence API on 2026-10-29; used under that licence with attribution."
    }
   }
  ]
