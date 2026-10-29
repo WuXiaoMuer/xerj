@@ -3,7 +3,7 @@
  "cloned_at": null,
  "status": "draft",
  "shelf": "OPS",
- "domain": "an agent working on cron, golang, infra queries this for how djlord-it/cronlite implements it: Cron infrastructure for agents and applications. Register jobs via REST or MCP, get reliable webhook delivery on schedule (selected work: internal/cron, tools, internal/webadmin)",
+ "domain": "an agent working on cron, golang, infra queries this for how djlord-it/cronlite implements it: Cron infrastructure for agents and applications. Register jobs via REST or MCP, get reliable webhook delivery on schedule. Now ready with Ta (selected work: internal/cron, tools, internal/webadmin)",
  "repos": [
   {
    "repo": "cronlite",

@@ -1,9 +1,9 @@
 {
- "corpus": "nightfireplus--ruanwen-agent",
+ "corpus": "nightfireplus--chunkloop",
  "cloned_at": null,
  "status": "draft",
- "shelf": "AI",
- "domain": "an agent working on Python queries this for how NightfirePlus/ruanwen-agent implements it: NightfirePlus/ruanwen-agent (Python) (selected work: agent, tests, tools)",
+ "shelf": "API",
+ "domain": "an agent working on Python queries this for how NightfirePlus/ChunkLoop implements it: NightfirePlus/ChunkLoop (Python) (selected work: agent, tests, tools)",
  "repos": [
   {
    "repo": "ruanwen-agent",

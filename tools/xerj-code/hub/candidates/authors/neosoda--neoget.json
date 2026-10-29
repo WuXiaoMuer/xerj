@@ -8,15 +8,15 @@
   {
    "repo": "NeoGet",
    "url": "https://github.com/neosoda/NeoGet",
-   "sha": "e677ab92e165f0292652c3dffd077fbf31f98eba",
-   "licence": "author's permission (LICENSE at pin e677ab92e165: NONE; repository: none)",
+   "sha": "f8e07ab482543953a3c4c55d5f351f5c197acba5",
+   "licence": "author's permission (LICENSE at pin f8e07ab48254: NONE; repository: none)",
    "review": {
     "spdx": "NONE",
     "use": "adapt-with-attribution",
     "by": "author-consent",
     "at": "2026-10-29T11:35Z",
     "consent_receipt": "8a5fd59d574e",
-    "note": "Inclusion consented by the repository owner, signed in with GitHub on hub.xerj.org/add, at 2026-10-29T11:35Z (receipt 8a5fd59d574e); pinned to the default-branch head. LICENSE at pin e677ab92e165: NONE (repository: none); used with the author's permission, with attribution."
+    "note": "Inclusion consented by the repository owner, signed in with GitHub on hub.xerj.org/add, at 2026-10-29T11:35Z (receipt 8a5fd59d574e); pinned to the default-branch head. LICENSE at pin f8e07ab48254: NONE (repository: none); used with the author's permission, with attribution."
    }
   }
  ]
