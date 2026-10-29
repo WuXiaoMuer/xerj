@@ -122,13 +122,14 @@ POSTS: list[dict[str, str]] = [
          alt="Cover art: 28 filled squares and 217 small empty rings scattered on grid paper, the filled ones joined by hairlines to a wide block of 454 empty cells, beside 32 yellow cells at the same pitch, then a gate of ink posts around two grey-blue columns and one empty yellow cell at its base",
          og_alt="Cover: “Faster autoindex” in display type beside the post’s square-matrix art, labelled 28 people + 217 agent reports, 454 indices, 32, and ES 9.05 · Lucene 25.4 MiB/s. The art: 28 filled squares and 217 small empty rings scattered on grid paper, the filled ones joined by hairlines to a wide block of 454 empty cells, beside 32 yellow cells at the same pitch, then a gate of ink posts around two grey-blue columns and one empty yellow cell at its base"),
     # poster: stars is GitHub stargazers_count, re-read right before rendering
-    # (2026-10-29); the curve is data/xerj-stargazers.json. See poster.py.
+    # (2026-10-29); the curve and best_12_days are data/xerj-stargazers.json;
+    # the mosaic is contributors.py. See poster.py.
     dict(slug="100-contributors", date="2026-10-29", motif="", poster="milestone",
-         stars="17484",
-         title="17,000 stars and 100 contributors",
-         subtitle="XERJ takes off.",
-         alt="Cover art: 17,484 in large display type on a yellow highlight above the label GitHub stars, beside a yellow area chart of the running star count from July to October 2026 that climbs steeply in the last two weeks, with markers at 5,000 stars on Oct 15 and 17,000 stars on Oct 27; below, 100 contributors since July, 7,226 Corpus Hub contributors and #1 Rust repo of the day and week on Trendshift",
-         og_alt="Cover: 17,484 in large display type on a yellow highlight above the label GitHub stars, beside a yellow area chart of the running star count from July to October 2026 that climbs steeply in the last two weeks, with markers at 5,000 stars on Oct 15 and 17,000 stars on Oct 27; below, 100 contributors since July, 7,226 Corpus Hub contributors and #1 Rust repo of the day and week on Trendshift"),
+         stars="17486",
+         title="100 contributors behind 12,000 stars in 12 days",
+         subtitle="",
+         alt="Cover art: 100 in huge display type above the word contributors, then 12,000 stars in 12 days on a yellow highlight and 17,486 GitHub stars today; beside it a yellow area chart of the running star count from July to October 2026 that climbs steeply from 5,000 stars on Oct 15 to 17,000 stars on Oct 27; on the right a 10 by 10 grid of the 100 contributors' GitHub avatars",
+         og_alt="Cover: 100 in huge display type above the word contributors, then 12,000 stars in 12 days on a yellow highlight and 17,486 GitHub stars today; beside it a yellow area chart of the running star count from July to October 2026 that climbs steeply from 5,000 stars on Oct 15 to 17,000 stars on Oct 27; on the right a 10 by 10 grid of the 100 contributors' GitHub avatars"),
 ]
 
 # og: title + motif with its labels, for social feeds that show the card alone.

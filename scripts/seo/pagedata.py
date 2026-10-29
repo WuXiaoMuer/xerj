@@ -234,20 +234,25 @@ PAGES: dict[str, dict[str, str]] = {
     # so rc.99 is the 98th tagged release. The post says "just over 100
     # days since rc.1" and does not print a day count taken from the tag date.
     # Milestone post, 2026-10-29. Every figure fact-checked live on 2026-10-29:
-    # 17,484 stars (gh api repos/xerj-org/xerj, 08:22 CDT); 5,000th star 2026-10-15,
-    # 17,000th 2026-10-27 (stargazers API, scripts/seo/blog_covers/data/xerj-stargazers.json);
-    # owner asked for a success-story title on PR #2649. 100 contributors = GitHub
+    # 17,486 stars (gh api repos/xerj-org/xerj, 08:56 CDT); 12,434 stars on Oct 15-26
+    # CDT and 12,582 in the best 12 x 24 h window; 5,000th star 2026-10-15, 17,000th
+    # 2026-10-27 (stargazers API, scripts/seo/blog_covers/data/xerj-stargazers.json).
+    # Owner asked to lead with the contributors on PR #2649. Title says
+    # "contributors", not "developers": the list includes xerj-team, cursoragent
+    # and one agent email. Outside PRs: 342 merged from 96 authors with
+    # authorAssociation CONTRIBUTOR or NONE (GraphQL, 08:53 CDT), 75 of them CLA
+    # sign-ons; field reports 44 from 39 authors. 100 contributors = GitHub
     # contributors?anon=1 (103 entries) minus xerj-org, noreply@xerj.org and
     # dependabot; #1 Rust repo of the day and week = Trendshift badges for repo
     # 116361 (GitHub Trending Rust #1 first on 2026-10-15); 7,226 = hub.xerj.org
     # /contributors/. Owner's "almost 10k" hub figure was not used (live: 7,226).
     "blog/100-contributors.html": dict(
         label="Milestone", kind="article",
-        title="17,000 stars and 100 contributors: XERJ takes off",
-        description="XERJ went from 5,000 to 17,000 GitHub stars in 12 days and has 100 contributors. What the search engine for AI agents does today, and what comes next.",
+        title="100 contributors behind 12,000 stars in 12 days",
+        description="Meet the 100 contributors behind XERJ, which gained over 12,000 GitHub stars in 12 days. What they built, what you get now, and what comes next.",
         published="2026-10-29", updated="2026-10-29",
         og_image="og/blog-100-contributors.png",
-        og_image_alt="Cover: 17,484 in large display type on a yellow highlight above the label GitHub stars, beside a yellow area chart of the running star count from July to October 2026 that climbs steeply in the last two weeks, with markers at 5,000 stars on Oct 15 and 17,000 stars on Oct 27; below, 100 contributors since July, 7,226 Corpus Hub contributors and #1 Rust repo of the day and week on Trendshift",
+        og_image_alt="Cover: 100 in huge display type above the word contributors, then 12,000 stars in 12 days on a yellow highlight and 17,486 GitHub stars today; beside it a yellow area chart of the running star count from July to October 2026 that climbs steeply from 5,000 stars on Oct 15 to 17,000 stars on Oct 27; on the right a 10 by 10 grid of the 100 contributors' GitHub avatars",
     ),
     # Performance post, 2026-10-26: a standalone post (not a release post).
     # Owner asked for positive, improvement-first framing. Numbers are measured
@@ -280,7 +285,7 @@ PAGES: dict[str, dict[str, str]] = {
     "blog/index.html": dict(
         label="Blog", kind="collection",
         title="XERJ.ai — Blog: the engineering log",
-        description="17,000 stars and 100 contributors: the XERJ milestone post. Also faster autoindex, the rc.99 launch, Corpus Hub v2 and the exploit hub.",
+        description="100 contributors behind 12,000 stars in 12 days: the XERJ milestone post. Also faster autoindex, the rc.99 launch, Corpus Hub v2 and the exploit hub.",
         updated="2026-10-29",
     ),
     "demo/index.html": dict(

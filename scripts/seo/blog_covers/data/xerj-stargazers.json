@@ -1,12 +1,18 @@
 {
- "_source": "GitHub REST API, GET /repos/xerj-org/xerj/stargazers (Accept: application/vnd.github.star+json), every page, fetched 2026-10-29 08:21 CDT. Each value is the running count of stargazers whose starred_at falls on or before that date in America/Chicago. Stars later removed are not in the list, so this can differ by a few from stargazers_count.",
- "fetched": "2026-10-29T08:21:00-05:00",
- "total_listed": 17483,
+ "_source": "GitHub REST API, GET /repos/xerj-org/xerj/stargazers (Accept: application/vnd.github.star+json), every page, fetched 2026-10-29 08:52 CDT. Each value in daily is the running count of stargazers whose starred_at falls on or before that date in America/Chicago. Stars later removed are not in the list, so this can differ by a few from stargazers_count.",
+ "fetched": "2026-10-29T08:52:00-05:00",
+ "total_listed": 17486,
  "milestones": {
   "1000": "2026-08-08T21:54:10-05:00",
-  "5000": "2026-10-15T10:54:33-05:00",
-  "10000": "2026-10-19T14:43:28-05:00",
-  "17000": "2026-10-27T17:09:19-05:00"
+  "5000": "2026-10-15T10:54:35-05:00",
+  "10000": "2026-10-19T14:43:34-05:00",
+  "17000": "2026-10-27T17:35:11-05:00"
+ },
+ "best_12_days": {
+  "stars": 12582,
+  "from": "2026-10-14T10:26:48-05:00",
+  "to": "2026-10-26T10:26:39-05:00",
+  "note": "the most stars in any 12 x 24 hour window"
  },
  "daily": {
   "2026-07-06": 1,
@@ -107,23 +113,23 @@
   "2026-10-09": 3284,
   "2026-10-10": 3367,
   "2026-10-11": 3444,
-  "2026-10-12": 3552,
-  "2026-10-13": 3685,
-  "2026-10-14": 4345,
-  "2026-10-15": 5575,
-  "2026-10-16": 6754,
-  "2026-10-17": 7601,
-  "2026-10-18": 8268,
-  "2026-10-19": 10319,
-  "2026-10-20": 12178,
-  "2026-10-21": 12568,
-  "2026-10-22": 12927,
-  "2026-10-23": 14015,
-  "2026-10-24": 15218,
-  "2026-10-25": 15502,
-  "2026-10-26": 16780,
-  "2026-10-27": 17071,
-  "2026-10-28": 17375,
-  "2026-10-29": 17483
+  "2026-10-12": 3551,
+  "2026-10-13": 3684,
+  "2026-10-14": 4344,
+  "2026-10-15": 5574,
+  "2026-10-16": 6753,
+  "2026-10-17": 7600,
+  "2026-10-18": 8267,
+  "2026-10-19": 10318,
+  "2026-10-20": 12177,
+  "2026-10-21": 12566,
+  "2026-10-22": 12925,
+  "2026-10-23": 14013,
+  "2026-10-24": 15216,
+  "2026-10-25": 15500,
+  "2026-10-26": 16778,
+  "2026-10-27": 17069,
+  "2026-10-28": 17373,
+  "2026-10-29": 17486
  }
 }
