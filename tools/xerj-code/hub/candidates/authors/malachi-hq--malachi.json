@@ -1,9 +1,9 @@
 {
- "corpus": "hectorifc--malachi",
+ "corpus": "malachi-hq--malachi",
  "cloned_at": null,
  "status": "draft",
  "shelf": "API",
- "domain": "an agent working on beam, consumer-groups, distributed-log queries this for how HectorIFC/malachi implements it: Malachi: Distributed log storage system (\ud83d\udea7 In Development) (selected work: test, lib/malachi)",
+ "domain": "an agent working on beam, consumer-groups, distributed-log queries this for how malachi-hq/malachi implements it: Malachi: Distributed log storage system (\ud83d\udea7 In Development) (selected work: test, lib/malachi)",
  "repos": [
   {
    "repo": "malachi",
