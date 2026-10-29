@@ -1483,6 +1483,8 @@ document.querySelectorAll('.copy').forEach(function(b){
 def render_index(corpora, g7, graded, impact, prov, people=None):
     live = [c for c in corpora if c["status"] == "live"]
     total_bytes = sum(sum(r.get("bytes") or 0 for r in c["repos"]) for c in live)
+    # owner, 2026-10-29: "78.7 GB pinned text" reads small; the file count of the same corpora is the headline (bytes in the tooltip)
+    total_files = sum(sum(r.get("files") or 0 for r in c["repos"]) for c in live)
     n_imp = sum(1 for c in live if impact.get(c["slug"], {}).get("status") == "measured")
     regions = sorted({region(c) for c in corpora if region(c)} - {""}, key=lambda r: (r == "GLOBAL", r))
     # Real, space-filling treemap: one band per domain (biggest domain first).
@@ -1549,7 +1551,7 @@ that loads one works like a domain expert.</p>
 {stars_stat}
 <div class="stat" title="distinct repositories pinned on the hub, each credited to the person who contributed it"><a href="contributors/"><b>{n_repos:,}</b><span>contributed repositories</span></a></div>
 <div class="stat"><a href="contributors/"><b>{len(people or {}):,}</b><span>contributors</span></a></div>
-<div class="stat"><b>{human_bytes(total_bytes)}</b><span>pinned text</span></div>
+<div class="stat" title="{human_bytes(total_bytes)} of text in these files, each pinned at an exact commit"><b>{total_files:,}</b><span>pinned files</span></div>
 </div>
 <a class="cta" href="contribute">Add your corpus &rarr;</a>
 </div>
