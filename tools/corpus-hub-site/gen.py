@@ -657,7 +657,7 @@ bottom:calc(var(--sp-6) / -2 - 5px);transform:translateX(-50%)}
 .arch .node:nth-child(1)::after{content:"\\2193"}
 .arch .node:nth-child(2)::after{content:"\\2191"}}
 .heroside{flex:0 1 360px;display:flex;flex-direction:column;gap:var(--sp-4);margin-top:var(--sp-2)}
-.statgrid{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;
+.statgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-auto-rows:1fr;
 gap:1px;background:var(--z-line);border:1px solid var(--z-line)}
 .heroside .cta{margin-top:0;text-align:center}
 .stat{background:var(--z-bg);padding:var(--sp-4) var(--sp-5);min-height:88px;
@@ -668,6 +668,8 @@ display:flex;flex-direction:column;justify-content:center;gap:4px}
 font-size:var(--fs-32);line-height:1;color:var(--z-ink)}
 .stat span{font-family:var(--font-data);font-size:var(--fs-11);font-weight:500;
 text-transform:uppercase;letter-spacing:var(--track-ui);color:var(--z-mute)}
+/* full numbers (7,194,550) on a phone: shrink with the viewport instead of overflowing it */
+@media (max-width:560px){.stat{padding:var(--sp-3) var(--sp-3);min-width:0}.stat b{font-size:clamp(17px,5.4vw,var(--fs-32))}}
 .count{font-family:var(--font-data);font-size:var(--fs-11);font-weight:500;
 text-transform:uppercase;letter-spacing:var(--track-ui);color:var(--z-mute);margin-left:auto}
 /* domains: the front page centrepiece, giant display words */
@@ -1532,11 +1534,14 @@ def render_index(corpora, g7, graded, impact, prov, people=None):
     # Stars: distinct pinned repos with a recorded count only (never estimated).
     stars, n_star_repos = contributors.pinned_repo_stars(people or {})
     stars_stat = (f'<div class="stat" title="{stars:,} GitHub stars, summed over {n_star_repos:,} distinct pinned repositories '
-                  f'that have a recorded star count"><b>{contributors.compact(stars)}</b><span>GitHub stars across pinned repos</span></div>'
+                  f'that have a recorded star count"><b>{stars:,}</b><span>GitHub stars across pinned repos</span></div>'
                   if n_star_repos else "")
     # owner, 2026-10-29: show the repository count (8,1xx) next to the people count (7,2xx): one person can contribute
     # several repositories. Replaces the "11 domains" tile; the domains are the treemap groups right below.
     n_repos = len({w["repo_url"].rstrip("/").lower() for pp in (people or {}).values() for w in pp["work"].values() if w.get("repo_url")})
+    # owner, 2026-10-29: "contributed repositories" next to "contributors" read as the same number twice; show the
+    # lines of the consented commits instead (contributors.volume, as on each profile; the repo count is in the tooltip)
+    n_lines = sum(contributors.volume(pp)["lines"] for pp in (people or {}).values())
     body = f'''<main>
 <div class="kicker"><span class="accent">HUB.XERJ.ORG</span><span class="dash">·</span><span>REFERENCE MEMORY HUB FOR AI AGENTS</span></div>
 <div class="herorow">
@@ -1549,7 +1554,7 @@ that loads one works like a domain expert.</p>
 <div class="heroside">
 <div class="statgrid">
 {stars_stat}
-<div class="stat" title="distinct repositories pinned on the hub, each credited to the person who contributed it"><a href="contributors/"><b>{n_repos:,}</b><span>contributed repositories</span></a></div>
+<div class="stat" title="lines in the commits contributors agreed to share, summed over every contributor (a commit counts once), across {n_repos:,} repositories"><a href="contributors/"><b>{n_lines:,}</b><span>lines of contributed code</span></a></div>
 <div class="stat"><a href="contributors/"><b>{len(people or {}):,}</b><span>contributors</span></a></div>
 <div class="stat" title="{human_bytes(total_bytes)} of text in these files, each pinned at an exact commit"><b>{total_files:,}</b><span>pinned files</span></div>
 </div>

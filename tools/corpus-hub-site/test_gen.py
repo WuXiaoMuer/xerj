@@ -883,11 +883,14 @@ class SiteLinksTest(unittest.TestCase):
         people = contributors.load(gen.HUB, gen.load_registry())
         stars, n = contributors.pinned_repo_stars(people)
         self.assertIn(f"<b>{len(people):,}</b><span>contributors</span>", strip)
-        self.assertIn(f"<b>{contributors.compact(stars)}</b><span>GitHub stars across pinned repos</span>", strip)
+        self.assertIn(f"<b>{stars:,}</b><span>GitHub stars across pinned repos</span>", strip)   # full numbers, no "7.2M"
         self.assertIn(f"{stars:,} GitHub stars, summed over {n:,} distinct pinned repositories", strip)
         # owner, 2026-10-29: the repository count and the file count (large numbers), not "11 domains" / "78.7 GB"
         n_repos = len({w["repo_url"].rstrip("/").lower() for pp in people.values() for w in pp["work"].values() if w.get("repo_url")})
-        self.assertIn(f"<b>{n_repos:,}</b><span>contributed repositories</span>", strip)
+        n_lines = sum(contributors.volume(pp)["lines"] for pp in people.values())
+        self.assertIn(f"<b>{n_lines:,}</b><span>lines of contributed code</span>", strip)
+        self.assertNotIn("contributed repositories</span>", strip)
+        self.assertNotRegex(strip, r"<b>[\d.]+[KMB]</b>")
         self.assertRegex(strip, r"<b>[\d,]{7,}</b><span>pinned files</span>")
         self.assertNotIn("<span>pinned text</span>", strip)
 
