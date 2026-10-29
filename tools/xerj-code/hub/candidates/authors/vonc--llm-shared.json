@@ -1,0 +1,23 @@
+{
+ "corpus": "vonc--llm-shared",
+ "cloned_at": null,
+ "status": "draft",
+ "shelf": "AI",
+ "domain": "an agent working on Python queries this for how VonC/llm-shared implements it: Shared skills and agents for software project development (selected work: tests, tools, bin)",
+ "repos": [
+  {
+   "repo": "llm-shared",
+   "url": "https://github.com/VonC/llm-shared",
+   "sha": "f33c6e4489686dc3a2407d7669628f33f110e14e",
+   "licence": "MIT (LICENSE file at pin f33c6e448968, GitHub licence API 2026-10-29)",
+   "review": {
+    "spdx": "MIT",
+    "use": "adapt-with-attribution",
+    "by": "author-consent",
+    "at": "2026-10-26T13:51Z",
+    "consent_receipt": "76a8e4e12def",
+    "note": "Inclusion consented by the commit author by email at 2026-10-26T13:51Z (receipt 76a8e4e12def); selected commit f33c6e448968: \"fix(deps): patch Pillow and uv vulnerabilities\". LICENSE file at pin f33c6e448968 detected as MIT by the GitHub licence API on 2026-10-29; used under that licence with attribution."
+   }
+  }
+ ]
+}

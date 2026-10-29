@@ -3,7 +3,7 @@
  "cloned_at": null,
  "status": "draft",
  "shelf": "AI",
- "domain": "an agent working on cli-tool, large-language-models, open-source queries this for how AgenticResourceRegistry/AgenticResourceRegistry implements it: Observal is self-hosted registry for your coding agent extensions with a built in insight engine. Setup Observal, define the scope and share (selected work: observal-server, tests)",
+ "domain": "an agent working on cli-tool, large-language-models, open-source queries this for how AgenticResourceRegistry/AgenticResourceRegistry implements it: Share and discover coding agent resources across your team. Self-hosted, Apache 2.0, works with Claude Code, Kiro, Cursor, Codex, Pi and mor (selected work: observal-server, tests)",
  "repos": [
   {
    "repo": "Observal",
