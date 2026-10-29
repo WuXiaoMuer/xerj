@@ -1,9 +1,9 @@
 {
- "corpus": "dshakes--lantern",
+ "corpus": "dshakes--pal",
  "cloned_at": null,
  "status": "draft",
  "shelf": "AI",
- "domain": "an agent working on agent-framework, ai-agents, firecracker queries this for how dshakes/lantern implements it: Production runtime for AI agents \u2014 run the whole stack locally with one command, ship to your own cloud. Real WhatsApp/Slack/voice/web chann (selected work: services, packages/sdk-go, packages/sdk-ts)",
+ "domain": "an agent working on agent-framework, ai-agents, firecracker queries this for how dshakes/pal implements it: Production runtime for AI agents \u2014 run the whole stack locally with one command, ship to your own cloud. Real WhatsApp/Slack/voice/web chann (selected work: services, packages/sdk-go, packages/sdk-ts)",
  "repos": [
   {
    "repo": "lantern",
