@@ -873,6 +873,27 @@ class SiteLinksTest(unittest.TestCase):
         self.assertIn('class="tmo"', repos_map)
         self.assertIn("others", repos_map)
 
+    def test_categories_list_contributed_corpora(self):
+        # owner, 2026-10-29: a contributor's corpus was live but missing from its category page.
+        # Every corpus in the contributor ledger is linked from its shelf's category page, to a page that exists.
+        import contributors, re as _re
+        people = contributors.load(gen.HUB, gen.load_registry())
+        want = {}
+        for pp in people.values():
+            for w in pp["work"].values():
+                for slug in w.get("corpora") or []:
+                    want.setdefault(slug, set()).add(w.get("shelf"))
+        if not want:
+            self.skipTest("no contributed corpora")
+        listed = {}
+        for f in (self.out / "category").glob("*.html"):
+            html = f.read_text()
+            if 'id="contributed"' in html:
+                for slug in set(_re.findall(r'href="\.\./corpus/([^"]+)"', html.split('id="contributed"', 1)[1])):
+                    listed.setdefault(slug, set()).add(f.stem)
+                    self.assertTrue((self.out / "corpus" / f"{slug}.html").is_file(), slug)
+        self.assertEqual(set(want) - set(listed), set())
+
     def test_home_stats_are_stars_and_contributors(self):
         # owner request: "registry rows" / "live corpora" replaced by real numbers
         import contributors
