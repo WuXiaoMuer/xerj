@@ -169,7 +169,7 @@
   <p>We merged the first pull request from outside the core team on July 23. Since then, we have merged 342 pull requests from 96 outside contributors. 75 of them add a name to the contributor list. The other 267 changed XERJ:</p>
 
   <ul>
-    <li><strong>44 field reports from 39 people.</strong> They ran XERJ on real work on Windows, macOS and Linux, and told us what worked and what broke. One used <code class="inline">xerj code</code> as a retriever on SWE-bench Lite (<a href="https://github.com/xerj-org/xerj/pull/1187" rel="external">#1187</a>).</li>
+    <li><strong>44 field reports from 39 people.</strong> They ran XERJ on real work on Windows, macOS and Linux, and told us what worked and what broke. Those reports also <a href="/blog/autoindex-search-performance-improvements">made autoindex faster</a>. One used <code class="inline">xerj code</code> as a retriever on SWE-bench Lite (<a href="https://github.com/xerj-org/xerj/pull/1187" rel="external">#1187</a>).</li>
     <li><strong>New file types for autoindex.</strong> PowerPoint, EPUB and man pages (<a href="https://github.com/xerj-org/xerj/pull/1117" rel="external">#1117</a>, <a href="https://github.com/xerj-org/xerj/pull/1159" rel="external">#1159</a>, <a href="https://github.com/xerj-org/xerj/pull/1134" rel="external">#1134</a>), Clojure and Scheme (<a href="https://github.com/xerj-org/xerj/pull/1305" rel="external">#1305</a>), PHP enums (<a href="https://github.com/xerj-org/xerj/pull/286" rel="external">#286</a>) and system logs (<a href="https://github.com/xerj-org/xerj/pull/1508" rel="external">#1508</a>).</li>
     <li><strong>New tools for agents.</strong> Go to definition and batch retrieval over MCP (<a href="https://github.com/xerj-org/xerj/pull/2166" rel="external">#2166</a>, <a href="https://github.com/xerj-org/xerj/pull/2333" rel="external">#2333</a>), and a list of agent memory namespaces (<a href="https://github.com/xerj-org/xerj/pull/2022" rel="external">#2022</a>).</li>
     <li><strong>Search and embeddings.</strong> ONNX embeddings (<a href="https://github.com/xerj-org/xerj/pull/2" rel="external">#2</a>), and code search that ranks the file that defines a symbol first (<a href="https://github.com/xerj-org/xerj/pull/327" rel="external">#327</a>).</li>
@@ -180,7 +180,51 @@
 </section>
 
 <section class="scene-section">
-  <div class="kicker">02 · THE STARS</div>
+  <div class="kicker">02 · THE ROAD HERE</div>
+  <h2 class="scene">How we got here</h2>
+
+  <p>From rc.1 to today in eight steps. Each one links to the post that told it at the time, with the losses left in.</p>
+
+  <div class="wire plain">
+    <div class="wp">
+      <div class="wh"><span class="wn">JUL 8</span><h3>rc.1: one Rust binary that speaks Elasticsearch</h3></div>
+      <p>The first release candidate passed <!-- snapshot:2026-07-06 -->1,326 of 1,329 Elasticsearch conformance cases, and its changelog named the 3 it missed. Today it passes 1,444 of 1,454. <a href="https://github.com/xerj-org/xerj/blob/main/CHANGELOG.md#100-rc1---2026-07-06" rel="external">Read the rc.1 changelog</a></p>
+    </div>
+    <div class="wp">
+      <div class="wh"><span class="wn">SEP 21</span><h3>We broke rerank, then fixed it in public</h3></div>
+      <p>Our rerank stage shipped scoring 0.3822 nDCG@10 while plain BM25 scored 0.7750. One request shape was wrong. Fixed, it scored 0.8299, and the loss stayed in the post. <a href="/blog/does-xerj-beat-jev">Does XERJ beat Jev?</a></p>
+    </div>
+    <div class="wp">
+      <div class="wh"><span class="wn">SEP 27</span><h3>28% off the index</h3></div>
+      <p>We dissected real segment files before writing any Rust. Three of the four format changes ended up different from the plan, and the test index went from about 5.52 MB to 3.99 MB. <a href="/blog/cutting-the-index-28-percent">Cutting the index 28%</a></p>
+    </div>
+    <div class="wp">
+      <div class="wh"><span class="wn">SEP 30</span><h3>The rc.80 gates</h3></div>
+      <p>Each feature got a bar, written down before the work. Three gates passed, three failed and one split. The failures became issues #1091 to #1094. <a href="/blog/the-rc80-gates">The rc.80 gates</a></p>
+    </div>
+    <div class="wp">
+      <div class="wh"><span class="wn">OCT 1</span><h3>Corpus Hub</h3></div>
+      <p>A public registry of corpora for agents: each source pinned to a commit, its licence reviewed, its pack signed. It launched with four corpora and had 100 live by October 6. <a href="/blog/the-corpus-hub">The Corpus Hub</a></p>
+    </div>
+    <div class="wp">
+      <div class="wh"><span class="wn">OCT 19</span><h3>Corpus Hub v2</h3></div>
+      <p>Ask a plain question, and the CLI picks the one signed pack that answers it. It pulls 4.4 MB and answers on your machine: 1.7 to 2.3 seconds the first time, 37 to 57 ms after that. <a href="/blog/corpus-hub-v2">Corpus Hub v2</a></p>
+    </div>
+    <div class="wp">
+      <div class="wh"><span class="wn">OCT 24</span><h3>rc.99: autoindex that respects your laptop</h3></div>
+      <p>Autoindex became resource-aware, so a laptop stays usable while it indexes. Agents can ask up to 50 questions in one call, each with cited evidence or a clear miss. 116 merged changes, 20 community members. <a href="/blog/rc99-smart-autoindex-harness-tools">rc.99</a></p>
+    </div>
+    <div class="wp">
+      <div class="wh"><span class="wn">OCT 26</span><h3>Your field reports made autoindex faster</h3></div>
+      <p>A compression change in rc.78 made autoindex about five times slower. Field reports found it, and the merge fix landed about seven hours after the 5 GB reproduction. On the 1 GB gate corpus, the index now takes 1.80 bytes per source byte, down from 3.50. <a href="/blog/autoindex-search-performance-improvements">How your field reports made XERJ autoindex faster</a></p>
+    </div>
+  </div>
+
+  <p>The pattern is the same each time: measure, publish what failed, and fix it, often with a report from one of you.</p>
+</section>
+
+<section class="scene-section">
+  <div class="kicker">03 · THE STARS</div>
   <h2 class="scene">12,000 stars in 12 days</h2>
 
   <div class="stat-band">
@@ -194,7 +238,7 @@
 </section>
 
 <section class="scene-section">
-  <div class="kicker">03 · WHAT YOU GET NOW</div>
+  <div class="kicker">04 · WHAT YOU GET NOW</div>
   <h2 class="scene">A new way for AI to reach data</h2>
 
   <p>XERJ is one Rust binary that indexes your code, docs, specs and logs, adds packs from the Corpus Hub, and gives your agent cited answers.</p>
@@ -217,7 +261,7 @@
 
     <div class="wp">
       <div class="wh"><span class="wn">ONE INDEX</span><h3>Code, docs, logs and data in one place</h3><span class="wm">SHIPPING</span></div>
-      <p>Autoindex reads 36 programming languages with symbols and line numbers, plus CSV, JSON, YAML, SQLite, PDF, DOCX, HTML, email and log files. Search is BM25, vector kNN, or both together. XERJ speaks the Elasticsearch API, so the clients you have already connect.</p>
+      <p>Autoindex reads 36 programming languages with symbols and line numbers, plus CSV, JSON, YAML, SQLite, PDF, DOCX, HTML, email and log files. Search is BM25, vector kNN, or both together. XERJ speaks the Elasticsearch API, so the clients you have already connect. The <a href="/benchmarks/elasticsearch">Elasticsearch scorecard</a> shows where it wins and where it loses.</p>
     </div>
 
     <div class="wp">
@@ -228,10 +272,10 @@
 </section>
 
 <section class="scene-section">
-  <div class="kicker">04 · NEXT</div>
+  <div class="kicker">05 · NEXT</div>
   <h2 class="scene">The road to 1.0</h2>
 
-  <p>The goal for 1.0 is simple: every public claim checked against the release binary, and every input either honoured or refused clearly. These items are on the <a href="https://github.com/xerj-org/xerj/blob/main/ROADMAP.md" rel="external">roadmap</a> for it:</p>
+  <p>The goal for 1.0 is simple: every public claim checked against the release binary, the way we ran <a href="/blog/the-rc80-gates">the rc.80 gates</a>, and every input either honoured or refused clearly. These items are on the <a href="https://github.com/xerj-org/xerj/blob/main/ROADMAP.md" rel="external">roadmap</a> for it:</p>
 
   <ul>
     <li>An MCP server for the Corpus Hub, so agents can query packs without cloning their sources (<a href="https://github.com/xerj-org/xerj/issues/1785" rel="external">#1785</a>).</li>
@@ -247,7 +291,7 @@
 </section>
 
 <section class="scene-section">
-  <div class="kicker">05 · TRY IT</div>
+  <div class="kicker">06 · TRY IT</div>
   <h2 class="scene">Give your agent a search engine</h2>
 
   <div class="prompt-card" style="box-sizing:border-box;max-width:100%;margin:var(--sp-5) 0">
@@ -264,6 +308,15 @@
     <li><a href="https://hub.xerj.org" rel="external">Corpus Hub</a></li>
     <li><a href="https://discord.com/invite/yetXFusXfs" rel="external">Discord</a></li>
     <li><a href="https://x.com/xerj_org" rel="external">X</a></li>
+  </ul>
+
+  <p>Read more from the blog:</p>
+  <ul>
+    <li><a href="/blog/the-exploit-hub">The exploit hub, tested on three fresh CVEs</a></li>
+    <li><a href="/blog/eval-scars-from-agent-memory">Six eval scars from a production agent-memory system</a></li>
+    <li><a href="/blog/jev-vs-a-bm25-vote">A BM25 vote ties Jev on spam and beats it on intent</a></li>
+    <li><a href="/blog/one-vulnerability-three-names">One vulnerability, three names</a></li>
+    <li><a href="/blog/">All posts</a></li>
   </ul>
 </section>
 </main>
