@@ -8,15 +8,15 @@
   {
    "repo": "Glint-for-Android-TV",
    "url": "https://github.com/boraswim/Glint-for-Android-TV",
-   "sha": "81b88d579d479c0f529ecb53d7917dcd811351c0",
-   "licence": "GPL-3.0 (LICENSE file at pin 81b88d579d47, GitHub licence API 2026-10-29)",
+   "sha": "e776258f40b51897ac92a27a561b2ee980164b72",
+   "licence": "GPL-3.0 (LICENSE file at pin e776258f40b5, GitHub licence API 2026-10-29)",
    "review": {
     "spdx": "GPL-3.0",
     "use": "approach-only",
     "by": "author-consent",
     "at": "2026-10-29T15:36Z",
     "consent_receipt": "6359dafd5d52",
-    "note": "Inclusion consented by the repository owner, signed in with GitHub on hub.xerj.org/add, at 2026-10-29T15:36Z (receipt 6359dafd5d52); pinned to the default-branch head. LICENSE file at pin 81b88d579d47 detected as GPL-3.0 by the GitHub licence API on 2026-10-29; used under that licence with attribution."
+    "note": "Inclusion consented by the repository owner, signed in with GitHub on hub.xerj.org/add, at 2026-10-29T15:36Z (receipt 6359dafd5d52); pinned to the default-branch head. LICENSE file at pin e776258f40b5 detected as GPL-3.0 by the GitHub licence API on 2026-10-29; used under that licence with attribution."
    }
   }
  ]
