@@ -2066,7 +2066,7 @@ mod tests {
 
     #[test]
     fn uncataloged_skips_claimed_sibling_dotted_and_catalog_indices() {
-        let docs = vec![
+        let docs = [
             run("run:o", "zq-2", "/data/o", "2026-01-01T00:00:00Z"),
             dataset("ds:other:x", "zq-claimed", "x", "o", 1, 1),
         ];
