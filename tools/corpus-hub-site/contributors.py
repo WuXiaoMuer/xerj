@@ -323,8 +323,10 @@ def person_body(pp, esc, live_slugs, pages=(), agent="", xposts=""):
         live = [c for c in w["corpora"] if c in live_slugs]
         # licence cleared (ledger licence.reviewed: author consent + LICENSE at the pin) is not "in licence review":
         # the only step left is the registry entry + pack build (2026-10-27, a contributor read it as a licence problem)
-        status = ('<span class="chip ok">live in the hub</span>' if live
-                  else '<span class="chip ok">selected for the XERJ Corpus Hub · licence cleared</span>' if w.get("reviewed")
+        # a licence-cleared contributed corpus IS live: its page is up and its prompt lets any agent search it now. Only a
+        # pre-built signed pack is extra (registry corpora). "awaiting pack build" read as "not live" (2026-10-29, on X)
+        status = ('<span class="chip ok">live in the hub · signed pack</span>' if live
+                  else '<span class="chip ok">live on the hub · licence cleared</span>' if w.get("reviewed")
                   else '<span class="chip warn">selected · in licence review</span>')
         # issue #1890: a corpus not in the registry has no manifest there, so
         # the documented install path (llms.txt step 3) 404s. Say so on the card.
@@ -674,8 +676,9 @@ MORE_JS = """<script>
     if(r.is_me){
       var me=add(body,el('div',{'class':'thisisme'}));
       add(me,el('h2',{},'This is you'));
-      var live=0,review=0;c.work.forEach(function(w){(w.corpora||[]).forEach(function(x){if(x.status==='live')live++;else review++})});
-      add(me,el('p',{},'You are signed in as @'+c.login+'. '+c.work.length+' of your commits are selected; '+live+' corpus entr'+(live===1?'y is':'ies are')+' live and '+review+' '+(review===1?'is':'are')+' still waiting for their pack build. Each card below shows where your work is and its last pack build.'));
+      // live = licence cleared (its page and prompt are up); a signed pack is an extra, not a condition (2026-10-29)
+      var live=0,packs=0,review=0;c.work.forEach(function(w){(w.corpora||[]).forEach(function(x){if(x.status==='live'||w.reviewed)live++;else review++;if(x.status==='live')packs++})});
+      add(me,el('p',{},'You are signed in as @'+c.login+'. '+c.work.length+' of your commits are selected; '+live+' corpus entr'+(live===1?'y is':'ies are')+' live on the hub: any agent can search '+(live===1?'it':'them')+' now with the prompt on '+(live===1?'its':'each')+' page.'+(packs?' '+packs+' also '+(packs===1?'has':'have')+' a pre-built signed pack.':'')+(review?' '+review+' '+(review===1?'is':'are')+' still in licence review.':'')+' Each card below shows where your work is.'));
       var a=add(me,el('p',{}));
       add(a,link('https://github.com/xerj-org/xerj/issues/new?title='+encodeURIComponent('Corpus Hub: change or remove my work (@'+c.login+')'),'Ask for a change or removal'));
       a.appendChild(document.createTextNode(' · '));add(a,link('/me','Your hub stars'));
@@ -693,7 +696,7 @@ MORE_JS = """<script>
         ['agreed',w.agreed]].filter(function(x){return x[1]});
       add(d,table(['',''],rows));
       if(w.corpora&&w.corpora.length)add(d,table(['corpus','status','manifest','last pack build'],w.corpora.map(function(x){
-        return [x.page?link('/corpus/'+x.slug,x.slug):x.slug,x.status||'candidate',x.manifest||'',build(x.last_build)]})));
+        return [link('/corpus/'+x.slug,x.slug),x.status==='live'?'live · signed pack':(w.reviewed?'live':'in licence review'),x.manifest||'',build(x.last_build)||(x.status==='live'?'':'not needed: the prompt indexes it on the agent\u2019s machine')]})));
     });
     var also=Object.keys(c.also_pinned_in||{});
     if(also.length)add(body,el('p',{'class':'note'},'Repositories of yours are also pinned in: '+also.join(', ')+'.'));
