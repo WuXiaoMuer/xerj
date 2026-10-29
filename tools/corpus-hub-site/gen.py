@@ -1795,17 +1795,46 @@ The review block records a human opening each licence file at the pin. Detector 
 {COPY_JS}{contributors.STARS_JS}{contributors.MORE_JS}{usage.USAGE_JS}{agent_score.PANEL_JS}'''
 
 
-def category_body(k, cs, g7, graded, impact):
+def contributed_in(k, people):
+    """Author-contributed corpora on shelf k, one row per corpus: (slug, repo, login, stars, spdx), most stars first.
+    Owner, 2026-10-29: a contributor found their corpus page live but not on its category page ("got a licence
+    clearance but not in live repo"); the category pages listed only the registry corpora."""
+    rows = {}
+    for login, pp in (people or {}).items():
+        for w in pp["work"].values():
+            if (w.get("shelf") or "") != k: continue
+            for slug in w.get("corpora") or []:
+                if slug not in rows: rows[slug] = (slug, w.get("repo") or slug, login, w.get("repo_stars") or 0, w.get("spdx") or "")
+    return sorted(rows.values(), key=lambda r: (-r[3], r[1].lower()))
+
+
+def contributed_section(k, rows):
+    if not rows:
+        return ""
+    trs = "".join(f'<tr><td><a href="../corpus/{esc(s)}">{esc(repo)}</a></td><td><a href="../contributors/{esc(lg)}">@{esc(lg)}</a></td>'
+                  f'<td class="mono">{stars:,}</td><td class="mono">{esc(spdx)}</td></tr>' for s, repo, lg, stars, spdx in rows)
+    return f'''<section class="detail contributed" id="contributed"><h2>Contributed corpora · {len(rows):,}</h2>
+<p class="note">Repositories their authors agreed to share, each pinned at a commit with its licence checked. Every one is live:
+its page has the prompt that lets an agent search it now.</p>
+<p class="row"><input class="cfilter" type="search" placeholder="filter by repository or contributor" aria-label="filter contributed corpora"></p>
+<table class="mystars"><tr><th>repository</th><th>contributor</th><th>GitHub ★</th><th>licence</th></tr>{trs}</table></section>
+<script>(function(){{var i=document.querySelector('.cfilter'),rs=[].slice.call(document.querySelectorAll('.contributed tr')).slice(1);
+i.addEventListener('input',function(){{var q=i.value.toLowerCase();rs.forEach(function(r){{r.hidden=q&&r.textContent.toLowerCase().indexOf(q)<0}})}})}})();</script>'''
+
+
+def category_body(k, cs, g7, graded, impact, contributed=()):
     title, what = CATS[k]
     cards = "\n".join(card(c, g7, graded, impact, rel="../") for c in cs)
     n_live = sum(1 for c in cs if c["status"] == "live")
+    more = f' <a href="#contributed">{len(contributed):,} contributed corpora</a>.' if contributed else ""
     return f'''<main>
 <p><a class="backlink" href="../">&larr; all corpora</a></p>
 <div class="kicker"><span class="accent">{esc(k)}</span><span class="dash">·</span><span>DOMAIN</span></div>
 <h1 class="hero" style="font-size:clamp(56px,9vw,var(--fs-160))">{esc(k)}</h1>
-<p class="lead">{esc(title)}. Agent asks: {esc(what)}. {n_live} live of {len(cs)} entries.</p>
+<p class="lead">{esc(title)}. Agent asks: {esc(what)}. {n_live} live of {len(cs)} entries.{more}</p>
 {agent_score.SORT_BAR}
 <div class="grid">{cards}</div>
+{contributed_section(k, contributed)}
 </main>{agent_score.CARDS_JS}'''
 
 
@@ -1966,7 +1995,7 @@ def main():
     for k, (title, what) in CATS.items():
         cs = [c for c in corpora if c["cat"] == k]
         (OUT / "category" / f"{k}.html").write_text(
-            page(f"{k}: {title} domain", what, category_body(k, cs, g7, graded, impact), rel="../",
+            page(f"{k}: {title} domain", what, category_body(k, cs, g7, graded, impact, contributed_in(k, people)), rel="../",
                  path=f"/category/{k}", kind="CollectionPage"))
     (OUT / "whats-this").mkdir(exist_ok=True)
     (OUT / "whats-this" / "index.html").write_text(page(
