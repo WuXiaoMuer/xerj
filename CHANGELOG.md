@@ -35,6 +35,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The node binds its ES-compat and REST listeners before it opens its
+  indices, and on plain-HTTP ports answers every request with
+  `503 node_starting_exception` (with `Retry-After: 1`) until the engine is
+  up. `/health/live` answers 200 `{"status":"starting"}` and `/health/ready`
+  answers 503, so a health check during a long startup no longer sees
+  "connection refused" and takes the node for dead. TLS ports bind early and
+  queue connections until the node is ready (#2575).
+
+- A body sent without a JSON `Content-Type` (the `curl -d` default,
+  `application/x-www-form-urlencoded`) is still refused with 415, as
+  Elasticsearch 8 does, but the reason now names the fix:
+  `-H 'Content-Type: application/json'`. The curl recipes that left the
+  header out now send it (#2575).
+
 - Boolean text queries with one `must` match now keep `filter` and `must_not`
   clauses non-scoring before a flush and on mixed memory/segment indices.
   Their retained hits use the same BM25 scores as the bare match (#2403).
