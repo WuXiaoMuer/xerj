@@ -8,15 +8,15 @@
   {
    "repo": "3m-ui",
    "url": "https://github.com/kazeyukiro/3m-ui",
-   "sha": "75eab6baa556744bc9c0baec98e4f94f7068392b",
-   "licence": "GPL-3.0 (LICENSE file at pin 75eab6baa556, GitHub licence API 2026-10-29)",
+   "sha": "b27a4c8c35c772d0d70202bf110e5586b6c24b97",
+   "licence": "GPL-3.0 (LICENSE file at pin b27a4c8c35c7, GitHub licence API 2026-10-29)",
    "review": {
     "spdx": "GPL-3.0",
     "use": "approach-only",
     "by": "author-consent",
     "at": "2026-10-06T06:38Z",
     "consent_receipt": "067e5cb3578a",
-    "note": "Inclusion consented by the commit author by email at 2026-10-06T06:38Z (receipt 067e5cb3578a); selected commit 75eab6baa556: \"feat(config): add inbound-tfo / inbound-mptcp global kernel settings \u2026\". LICENSE file at pin 75eab6baa556 detected as GPL-3.0 by the GitHub licence API on 2026-10-29; used under that licence with attribution. Pinned to head 75eab6baa556 (contains the selected commit): the LICENSE at the selected commit was EPL-2.0."
+    "note": "Inclusion consented by the commit author by email at 2026-10-06T06:38Z (receipt 067e5cb3578a); selected commit b27a4c8c35c7: \"feat(config): add inbound-tfo / inbound-mptcp global kernel settings \u2026\". LICENSE file at pin b27a4c8c35c7 detected as GPL-3.0 by the GitHub licence API on 2026-10-29; used under that licence with attribution. Pinned to head b27a4c8c35c7 (contains the selected commit): the LICENSE at the selected commit was EPL-2.0."
    }
   }
  ]
