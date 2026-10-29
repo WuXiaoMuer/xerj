@@ -11,7 +11,7 @@ use std::time::Duration;
 // are pinned by the `local admin-key discovery` tests at the bottom of this
 // file: they stayed here when the helpers moved to `xerj-common`, so they
 // are the shared helpers' tests wherever the helpers live.
-use xerj_common::localauth::{discover_local_admin_key_for_url, url_is_loopback};
+use xerj_common::localauth::{discover_local_admin_key_for_url_with_origin, url_is_loopback};
 
 /// Largest `--max-minutes` accepted: one week. Past that the flag is a typo,
 /// and `--max-minutes 0` already exists to mean "never ask".
@@ -208,6 +208,9 @@ pub struct RemoveCfg {
     /// When set, `remove` also deletes `journal.ndjson` here. The default
     /// journal for the selected folder is deleted either way.
     pub state_dir: Option<PathBuf>,
+    /// `--uncataloged`: when the prefix has no catalog run and no resume
+    /// journal, delete the live `<prefix>-*` indices nothing names (#2405).
+    pub uncataloged: bool,
 }
 
 /// `xerj autoindex s3://bucket/prefix --watch`: poll a bucket and emit a change
@@ -314,7 +317,7 @@ pub fn help_text_with(feedback: bool) -> String {
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20--dry-run`: walk, sniff, infer, print the plan.\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20Nothing is written to an index. With no\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20folder, `map` reads the catalog on --url\n\
-         \x20\x20\x20\x20xerj autoindex remove --prefix <P> [--root <DIR>] [--yes]\n\
+         \x20\x20\x20\x20xerj autoindex remove --prefix <P> [--root <DIR>] [--uncataloged] [--yes]\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20list one folder's indices and catalog rows,\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20then delete them. Nothing is deleted without\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20--yes or a terminal y. Another folder under\n\
@@ -322,6 +325,10 @@ pub fn help_text_with(feedback: bool) -> String {
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20build of this folder left, with no catalog run, is\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20included. A cataloged index another folder still names\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20is left in place.\n\
+\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20With --uncataloged, a prefix with no catalog run\n\
+\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20and no resume journal (a build that never reached\n\
+\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20finalize, its journal gone) drops the live <P>-*\n\
+\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20indices that no catalog row names.\n\
          \x20\x20\x20\x20xerj autoindex status [OPTIONS]       resume-journal + index progress view\n\
          \x20\x20\x20\x20xerj autoindex s3://bucket/prefix --watch [OPTIONS]\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20poll object storage and emit a change feed\n\
@@ -493,7 +500,7 @@ pub fn help_text_with(feedback: bool) -> String {
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20the JSON decision request on stdout and exits 4 instead,\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20exactly like an agent-driven run. See ESTIMATE + DECISION\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20GATE.\n\
-         \x20\x20\x20\x20--dataset <SLUG>     (map, no folder) show a single catalog dataset\n\
+         \x20\x20\x20\x20--dataset <SLUG>     (map, no folder) show one autoindex dataset (not a managed corpus slug)\n\
          \x20\x20\x20\x20--offset <N>         (map, no folder) skip the first N dataset detail sections\n\
          \x20\x20\x20\x20--limit <N>          (map, no folder) how many dataset detail sections to print\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20(default: all of them when there are few, otherwise\n\
@@ -689,22 +696,17 @@ pub fn help_text_with(feedback: bool) -> String {
          \n\
          RESUME POLICY:\n\
          \x20\x20\x20\x20{resume_policy_help}.\n\
-         \x20\x20\x20\x20On a graph-enabled or pre-generation journal the durable plan supports no-op\n\
-         \x20\x20\x20\x20resume and same-path content replacement. Files added after that plan was frozen\n\
-         \x20\x20\x20\x20are reported as skipped and are not indexed; --fresh rebuilds the plan in place\n\
-         \x20\x20\x20\x20and picks them up. Removing an indexed file is refused there before any remote\n\
-         \x20\x20\x20\x20mutation: its documents are already live and nothing on that path deletes them.\n\
-         \x20\x20\x20\x20Restore the file and rerun, or rebuild — in place by deleting the published\n\
-         \x20\x20\x20\x20indices and the state directory, or isolated under a new --state-dir, --prefix\n\
-         \x20\x20\x20\x20and --brain (or --no-graph), validated before you switch readers.\n\
-         \x20\x20\x20\x20--fresh is not a destination wipe. A file that is still present and whose\n\
-         \x20\x20\x20\x20content key changed is republished, and the documents previously published\n\
-         \x20\x20\x20\x20for that path are removed. A disappeared file is still refused before any\n\
-         \x20\x20\x20\x20remote mutation, and its documents stay. --fresh is refused outright once a\n\
-         \x20\x20\x20\x20durable corpus generation exists (re-run without it — the generated path\n\
-         \x20\x20\x20\x20reconciles the change incrementally). For an independent rebuild use a new\n\
-         \x20\x20\x20\x20--state-dir and a new --prefix, plus a new --brain when graph is enabled\n\
-         \x20\x20\x20\x20(or --no-graph).\n\
+         \x20\x20\x20\x20On a graph-enabled journal, unchanged runs and same-path replacements\n\
+         \x20\x20\x20\x20reuse the durable plan. Added files that fit a frozen dataset are indexed;\n\
+         \x20\x20\x20\x20files needing a new dataset report exit 3, stale-resume-plan and ok=false.\n\
+         \x20\x20\x20\x20Use --fresh to rebuild that graph plan and include them. Removed files\n\
+         \x20\x20\x20\x20are swept with reason=files-removed. A wider exclusion rule requires\n\
+         \x20\x20\x20\x20--drop-indexed approval before its previously indexed documents are swept.\n\
+         \x20\x20\x20\x20--fresh is not a destination wipe. It is refused once a durable corpus\n\
+         \x20\x20\x20\x20generation exists: rerun without it to reconcile changes incrementally.\n\
+         \x20\x20\x20\x20A pre-generation --no-graph journal needs an isolated rebuild under a new\n\
+         \x20\x20\x20\x20--state-dir and --prefix. For any independent graph rebuild also use a new\n\
+         \x20\x20\x20\x20--brain (or --no-graph).\n\
          \x20\x20\x20\x20Validate before switching readers; explicitly clean the shared\n\
          \x20\x20\x20\x20autoindex-catalog and old target only after validation.\n\
          \n\
@@ -781,7 +783,8 @@ pub fn help_text_with(feedback: bool) -> String {
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x203 completed-with-junk (junk recorded, never fatal) — SUCCESS:\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20the index is searchable, and the summary on stdout opens\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20with a line starting `ok:` that says so (xerj-done carries\n\
-         \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20ok=true). Treat 0 and 3 alike as a finished run. This\n\
+         \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20ok=true), except stale-resume-plan below. Treat 0 and 3\n\
+         \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20alike as a finished run. This\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20includes a dataset whose mapping the server REFUSED: its\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20files are recorded as junk with the server's reason, the\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20xerj-done line carries datasets_refused / files_refused,\n\
@@ -795,8 +798,11 @@ pub fn help_text_with(feedback: bool) -> String {
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20resume plan was frozen. They are not counted as junk.\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20`skipped_appeared` is the count; the summary names the\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20first few paths and says to re-run with --fresh to\n\
-         \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20rebuild the plan in place and include them. Read `reason`\n\
-         \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20to tell this apart from completed-with-junk;\n\
+         \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20rebuild the plan in place and include them. For this\n\
+         \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20exit 3, the xerj-done line\n\
+         \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20carries ok=false and the summary opens with `not ok:`,\n\
+         \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20because the files it skipped are not searchable. Read\n\
+         \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20`reason` to tell this apart from completed-with-junk;\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20or files-removed — a graph-path rerun deleted documents,\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20catalog rows and edges for files that left the folder.\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20The index matches the folder; the next unchanged rerun is\n\
@@ -810,9 +816,9 @@ pub fn help_text_with(feedback: bool) -> String {
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20that does not fit is not started, including with --yes.\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20Already-indexed files are not deleted unless --drop-indexed\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20is also set;\n\
-         \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x202 usage; 1 endpoint/journal failure, a refused corpus removal, a\n\
-         \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20refused unsafe state transition, or pdf-worker-unavailable — every PDF\n\
-         \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20failed because the isolated parser could not start. Other files may\n\
+         \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x202 usage; 1 runtime failure, including endpoint/journal failure,\n\
+         \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20a refused removal or unsafe state transition, verification failure,\n\
+         \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20or pdf-worker-unavailable (the isolated PDF parser could not start). Files may\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20already be indexed. Read `reason` on the xerj-done line; the summary\n\
          \x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20on stdout opens with `not ok:`\n",
         feedback_block = xerj_common::feedback::block(feedback),
@@ -962,6 +968,7 @@ pub fn parse(args: Vec<String>) -> Result<Cmd, String> {
     // is not a confirmation for `autoindex remove`.
     let mut yes_flag = false;
     let mut remove_root: Option<String> = None;
+    let mut remove_uncataloged = false;
     let mut markdown = false;
     let mut code_analyzer_explicit = false;
     let mut max_index_bytes: Option<u64> = None;
@@ -1243,6 +1250,12 @@ pub fn parse(args: Vec<String>) -> Result<Cmd, String> {
                     .ok_or("--code-analyzer needs a value: standard or code")?;
                 code_analyzer = crate::infer::CodeAnalyzer::parse(&raw)?;
                 code_analyzer_explicit = true;
+            }
+            "--uncataloged" => {
+                if remove_uncataloged {
+                    return Err("--uncataloged was given twice".into());
+                }
+                remove_uncataloged = true;
             }
             "--root" => {
                 let raw = it
@@ -1670,18 +1683,24 @@ pub fn parse(args: Vec<String>) -> Result<Cmd, String> {
     // we are talking to a server on this machine, and sending it anywhere else
     // would leak a credential to a host it does not belong to.
     if api_key.is_none() && url_is_loopback(&url) {
-        if let Some((key, path)) = discover_local_admin_key_for_url(&url) {
+        if let Some(found) = discover_local_admin_key_for_url_with_origin(&url) {
             // Announced, never silent: a blind onboarding run found this
             // fallback made success depend on the working directory, because
             // `./data/admin.key` is resolved relative to cwd. Saying which
             // file was used turns "it worked here and not there" into
-            // something the reader can see and reason about.
+            // something the reader can see and reason about; saying which
+            // discovery step found it (#2578) turns "why is it using another
+            // project's key?" into the same kind of answer.
             eprintln!(
-                "autoindex: no --api-key/XERJ_API_KEY given; using the admin key at {}",
-                path.display()
+                "autoindex: no --api-key/XERJ_API_KEY given; using the admin key at {} ({})",
+                found.path.display(),
+                found.provenance()
             );
-            api_key = Some(key);
-            api_key_file = Some(path);
+            if let Some(warning) = found.foreign_warning("--api-key or XERJ_API_KEY") {
+                eprintln!("autoindex: warning: {warning}");
+            }
+            api_key = Some(found.key);
+            api_key_file = Some(found.path);
         }
     }
 
@@ -1889,6 +1908,14 @@ pub fn parse(args: Vec<String>) -> Result<Cmd, String> {
         })));
     }
 
+    if remove_uncataloged && sub.as_deref() != Some("remove") {
+        return Err(
+            "--uncataloged selects the uncataloged indices `autoindex remove` drops. It is only \
+             supported with `autoindex remove --prefix <P> --uncataloged`."
+                .into(),
+        );
+    }
+
     if remove_root.is_some() && sub.as_deref() != Some("remove") {
         return Err(
             "--root names the folder `autoindex remove` drops. It is only supported with \
@@ -1909,6 +1936,7 @@ pub fn parse(args: Vec<String>) -> Result<Cmd, String> {
                 quiet,
                 xerj_url_note,
                 state_dir: state_dir.clone(),
+                uncataloged: remove_uncataloged,
             },
             prefix_explicit,
             approve_set: approve.is_some(),
@@ -3104,6 +3132,20 @@ mod tests {
             Some(std::path::Path::new("/tmp/j"))
         );
         assert!(err(&["data", "--root", "/tmp/a"]).contains("only supported with"));
+        // #2405: the uncataloged opt-in parses for remove and only for remove.
+        let cfg = match parse(
+            ["remove", "--prefix", "proj", "--uncataloged", "--yes"]
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+        )
+        .unwrap()
+        {
+            Cmd::Remove(cfg) => cfg,
+            other => panic!("expected remove, got {other:?}"),
+        };
+        assert!(cfg.uncataloged);
+        assert!(err(&["data", "--uncataloged"]).contains("only supported with"));
         assert!(err(&["remove", "--prefix", "proj", "--approve", "proceed"]).contains("--yes"));
         assert!(super::help_text().contains("autoindex remove"));
     }
@@ -3952,6 +3994,9 @@ mod tests {
     /// is the `--dry-run` preview. A bare `map` still reads the catalog.
     #[test]
     fn map_with_a_folder_is_the_dry_run_preview_and_bare_map_stays_the_catalog() {
+        // Both parses discover local auth. Hold the same lock as the
+        // sandbox tests so cwd/key discovery cannot change between them.
+        let _env = ENV_LOCK.lock().unwrap_or_else(|poison| poison.into_inner());
         let help = super::help_text();
         assert!(
             help.contains("xerj autoindex map <folder>"),

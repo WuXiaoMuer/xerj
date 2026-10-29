@@ -2015,6 +2015,15 @@ mod flush_publication_recovery_tests {
         assert_eq!(idx.search(&request).await.unwrap().hits[0].id, "survivor");
     }
 
+    fn topk_projection_config(dir: &std::path::Path) -> Config {
+        let mut config = Config::default();
+        config.server.data_dir = dir.to_string_lossy().into_owned();
+        // These tests exercise large, columnar segments. The CPU-dependent
+        // default can split the fixture below the row-window or ZBS2 threshold.
+        config.engine.ingest_shards = 1;
+        config
+    }
+
     fn topk_projection_schema() -> Schema {
         let mut schema = Schema::empty();
         for f in ["title", "body", "blob"] {
@@ -2035,9 +2044,7 @@ mod flush_publication_recovery_tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn cold_broad_topk_reads_identities_and_hydrates_only_winners() {
         let dir = tempfile::tempdir().unwrap();
-        let mut config = Config::default();
-        config.server.data_dir = dir.path().to_string_lossy().into_owned();
-        let engine = crate::Engine::new(config).unwrap();
+        let engine = crate::Engine::new(topk_projection_config(dir.path())).unwrap();
         engine
             .create_index("broad-cold", topk_projection_schema())
             .unwrap();
@@ -2068,9 +2075,7 @@ mod flush_publication_recovery_tests {
         drop(engine);
 
         let reopen = || {
-            let mut c = Config::default();
-            c.server.data_dir = dir.path().to_string_lossy().into_owned();
-            let engine = crate::Engine::new(c).unwrap();
+            let engine = crate::Engine::new(topk_projection_config(dir.path())).unwrap();
             let idx = engine.get_index("broad-cold").unwrap();
             idx.abort_background_tasks();
             // Hold the background warm back so each query is observed alone.
@@ -2178,9 +2183,7 @@ mod flush_publication_recovery_tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn cold_topk_with_source_includes_reads_only_winning_rows() {
         let dir = tempfile::tempdir().unwrap();
-        let mut config = Config::default();
-        config.server.data_dir = dir.path().to_string_lossy().into_owned();
-        let engine = crate::Engine::new(config).unwrap();
+        let engine = crate::Engine::new(topk_projection_config(dir.path())).unwrap();
         engine
             .create_index("topk-cold", topk_projection_schema())
             .unwrap();
@@ -2205,9 +2208,7 @@ mod flush_publication_recovery_tests {
         drop(engine);
 
         let reopen = || {
-            let mut c = Config::default();
-            c.server.data_dir = dir.path().to_string_lossy().into_owned();
-            let engine = crate::Engine::new(c).unwrap();
+            let engine = crate::Engine::new(topk_projection_config(dir.path())).unwrap();
             let idx = engine.get_index("topk-cold").unwrap();
             idx.abort_background_tasks();
             (engine, idx)
@@ -2318,9 +2319,7 @@ mod flush_publication_recovery_tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn cold_stored_scan_with_source_includes_decodes_only_kept_columns() {
         let dir = tempfile::tempdir().unwrap();
-        let mut config = Config::default();
-        config.server.data_dir = dir.path().to_string_lossy().into_owned();
-        let engine = crate::Engine::new(config).unwrap();
+        let engine = crate::Engine::new(topk_projection_config(dir.path())).unwrap();
         engine
             .create_index("scan-cold", topk_projection_schema())
             .unwrap();
@@ -2351,13 +2350,13 @@ mod flush_publication_recovery_tests {
         drop(engine);
 
         let reopen = || {
-            let mut c = Config::default();
-            c.server.data_dir = dir.path().to_string_lossy().into_owned();
-            let engine = crate::Engine::new(c).unwrap();
+            let engine = crate::Engine::new(topk_projection_config(dir.path())).unwrap();
             let idx = engine.get_index("scan-cold").unwrap();
             idx.abort_background_tasks();
             let held: Vec<String> = {
                 let snapshot = idx.store.snapshot();
+                assert_eq!(snapshot.segments.len(), 1, "single-shard fixture");
+                assert_eq!(snapshot.segments[0].doc_count, 1500);
                 snapshot.segments.iter().map(|s| s.id.to_string()).collect()
             };
             for id in &held {
@@ -2426,16 +2425,14 @@ mod flush_publication_recovery_tests {
             .iter()
             .map(|h| (h.id.clone(), segs[0].clone()))
             .collect();
-        if segs.len() == 1 {
-            idx.locate_scan_projected_rows(&cold.hits, &seg_of, &mut row_projected);
-            assert_eq!(row_projected.len(), cold.hits.len());
-            for h in &cold.hits {
-                let (seg, pos) = &row_projected[&h.id];
-                let mut rows = idx.hydrate_fts_rows_cold(seg, &[*pos], None).unwrap();
-                let doc = rows.remove(pos).unwrap();
-                assert_eq!(doc["_id"].as_str(), Some(h.id.as_str()));
-                assert!(doc["_source"]["body_vector_chunks"].is_array());
-            }
+        idx.locate_scan_projected_rows(&cold.hits, &seg_of, &mut row_projected);
+        assert_eq!(row_projected.len(), cold.hits.len());
+        for h in &cold.hits {
+            let (seg, pos) = &row_projected[&h.id];
+            let mut rows = idx.hydrate_fts_rows_cold(seg, &[*pos], None).unwrap();
+            let doc = rows.remove(pos).unwrap();
+            assert_eq!(doc["_id"].as_str(), Some(h.id.as_str()));
+            assert!(doc["_source"]["body_vector_chunks"].is_array());
         }
         drop(idx);
         drop(engine);
@@ -10816,6 +10813,13 @@ pub struct Index {
     merge_batches_deferred: std::sync::atomic::AtomicBool,
 }
 
+/// Keeps one index's schema unavailable to statistics until dropped.
+#[cfg(any(test, feature = "lock-test-hook"))]
+#[doc(hidden)]
+pub struct TestSchemaWriteHold(
+    #[allow(dead_code)] tokio::sync::OwnedRwLockWriteGuard<ManagedSchema>,
+);
+
 /// Counts one `Index::refresh` that got past the test hold, on every exit.
 #[cfg(any(test, feature = "refresh-test-hook"))]
 struct TestRefreshFinished<'a>(&'a Index);
@@ -14516,7 +14520,7 @@ impl Index {
                     rss_mb = governor.observed_rss_bytes() / (1024 * 1024),
                     limit_mb = governor.process_memory_limit_bytes() / (1024 * 1024),
                     next_batch_cap_mb = cap / (1024 * 1024),
-                    "merge batch yielded: breaker engaged with RSS at the process limit; \
+                    "merge batch yielded: memory pressure with RSS at the merge-pool ceiling; \
                      inputs kept, later batches narrowed"
                 );
                 true
@@ -14966,6 +14970,19 @@ impl Index {
                         ordinals.resize(raw_docs.len(), None);
                         doc_maps[source_index] = ordinals;
                         for (source_ordinal, raw) in raw_docs.iter().enumerate() {
+                            // #2427 — the survivor scan copies each input's
+                            // live docs, so a batch can grow hundreds of MB
+                            // inside one input. Check the governor every
+                            // `MERGE_YIELD_CHECKPOINT_DOCS` docs, not only
+                            // between inputs.
+                            if source_ordinal > 0
+                                && (source_ordinal as u64)
+                                    .is_multiple_of(crate::merge_budget::MERGE_YIELD_CHECKPOINT_DOCS)
+                                && must_yield()
+                            {
+                                yielded_for_task.fetch_add(1, Ordering::Relaxed);
+                                return None;
+                            }
                             let raw_str = raw.get();
                             let id_seq: IdSeq = match serde_json::from_str(raw_str) {
                                 Ok(v) => v,
@@ -15124,11 +15141,18 @@ impl Index {
                         // `fts_input` grow, so the crossover IS the batch's
                         // stored-side peak.
                         drain_checkpoint += 1;
+                        // #2427 — the yield check runs every
+                        // `MERGE_YIELD_CHECKPOINT_DOCS` docs. At 8192 a pg-docs
+                        // batch on the 1 GB gate grew RSS 300+ MB past the
+                        // watermark between two checks.
+                        if drain_checkpoint
+                            .is_multiple_of(crate::merge_budget::MERGE_YIELD_CHECKPOINT_DOCS)
+                            && must_yield()
+                        {
+                            yielded_for_task.fetch_add(1, Ordering::Relaxed);
+                            return None;
+                        }
                         if drain_checkpoint.is_multiple_of(8192) {
-                            if must_yield() {
-                                yielded_for_task.fetch_add(1, Ordering::Relaxed);
-                                return None;
-                            }
                             crate::ingest_memory::observe_checkpoint(
                                 crate::ingest_memory::Category::MergeJsonBuffer,
                                 merged_json_buf.len(),
@@ -24392,6 +24416,58 @@ impl Index {
                         uncollected,
                     )
                 }
+            } else if let Some((bf_field, bf_text, bf_must, bf_gate)) =
+                bool_filter_mem_fts_must(query)
+            {
+                // #2403: `bool{must:[match], filter|must_not:[..]}` used to
+                // fall through to the stored-doc scan, which scored every
+                // buffered match with the IDF-less `1 + ln(1 + tf)` while the
+                // bare `match` took the BM25 arm below, so the ranking changed
+                // at flush. `filter` and `must_not` are non-scoring
+                // (`BooleanClause.isScoring()`, BooleanClause.java:84-87), so
+                // score the `must` clause through the SAME memtable BM25 path
+                // the bare `match` takes, then keep only the hits the gate
+                // admits. UNCAPPED: the gate runs after scoring, so a capped
+                // list could drop a hit the gate would keep, and the consume
+                // arm's ghost-window liveness filter needs every hit anyway.
+                let mut field_boosts: std::collections::HashMap<String, f32> =
+                    std::collections::HashMap::new();
+                collect_field_boosts(bf_must, &mut field_boosts);
+                let mem_stats = collection_stats();
+                let (hits, _) = mem.search_text_boosted_with_total_using(
+                    bf_text,
+                    &[bf_field],
+                    usize::MAX,
+                    &field_boosts,
+                    mem_stats.as_deref(),
+                );
+                // Same conservative `_id` detection as the doc-scan arm: only
+                // a gate that can read `_id` pays for injecting it.
+                let gate_may_read_id: bool = serde_json::to_string(&bf_gate)
+                    .map(|s| s.contains("_id") || s.contains("Ids") || s.contains("ids"))
+                    .unwrap_or(true);
+                let kept: Vec<(String, f32)> = hits
+                    .into_iter()
+                    .filter(|h| {
+                        let Some(source) = mem.get_doc_source_arc(&h.doc_id) else {
+                            return false;
+                        };
+                        if !gate_may_read_id || source.get("_id").is_some() {
+                            return doc_matches_query_typed(&bf_gate, &source, &dmq_schema);
+                        }
+                        let mut with_id = (*source).clone();
+                        if let Some(obj) = with_id.as_object_mut() {
+                            obj.insert("_id".to_string(), Value::String(h.doc_id.clone()));
+                        }
+                        doc_matches_query_typed(&bf_gate, &with_id, &dmq_schema)
+                    })
+                    .map(|h| (h.doc_id, h.score))
+                    .collect();
+                if kept.is_empty() {
+                    MemSnapshot::Empty
+                } else {
+                    MemSnapshot::FtsHits(kept, 0)
+                }
             } else if is_doc_scan_query(query) {
                 // count_only + Term/Range short-circuits BEFORE
                 // `try_doc_values_query` because the DV-term path walks
@@ -28741,6 +28817,13 @@ impl Index {
         out
     }
 
+    /// Deterministic stand-in for a stalled schema update (#2405).
+    #[cfg(any(test, feature = "lock-test-hook"))]
+    #[doc(hidden)]
+    pub async fn test_hold_schema_write(&self) -> TestSchemaWriteHold {
+        TestSchemaWriteHold(Arc::clone(&self.schema).write_owned().await)
+    }
+
     pub async fn stats(&self) -> IndexStats {
         let snap = self.store.snapshot();
         let segment_count = snap.segments.len();
@@ -32131,9 +32214,16 @@ impl Index {
         // any token the segment projection never named (per-field analyzers
         // can differ) joins `pairs` and gets its segment-side df in the single
         // pass below, instead of the memtable silently keeping a local df.
+        // A filtered `bool` (#2403) has no query text of its own, but its
+        // memtable arm scores the one `must` match: count that clause, or a
+        // mixed index scores its segment hits against a union that left the
+        // unflushed docs out.
+        let mem_text = match bool_filter_mem_fts_must(query) {
+            Some((_, text, _, _)) => Some(text.to_string()),
+            None => extract_query_text(query),
+        };
         let mem_stats: Option<xerj_fts::CollectionStats> = if mem_doc_count > 0 {
-            extract_query_text(query)
-                .and_then(|text| self.memtable.collection_stats(&text, &field_refs))
+            mem_text.and_then(|text| self.memtable.collection_stats(&text, &field_refs))
         } else {
             None
         };
@@ -49551,6 +49641,7 @@ fn mem_bool_preds(q: &QueryNode) -> Option<Vec<crate::memtable::MemBoolPred>> {
                 preds.push(MemBoolPred::Term {
                     field: field.clone(),
                     value: val_str,
+                    num: value.as_f64(),
                 });
             }
             QueryNode::Terms { field, values, .. } => {
@@ -49576,6 +49667,7 @@ fn mem_bool_preds(q: &QueryNode) -> Option<Vec<crate::memtable::MemBoolPred>> {
                 preds.push(MemBoolPred::Terms {
                     field: field.clone(),
                     values: lowered,
+                    nums: values.iter().filter_map(Value::as_f64).collect(),
                 });
             }
             QueryNode::Range {
@@ -49627,6 +49719,18 @@ fn try_doc_values_query(
     limit: usize,
 ) -> Option<(Vec<(String, usize)>, u64)> {
     match q {
+        // A JSON-number needle must match by value, which the keyword-column
+        // walks below cannot do (they compare the needle's string form with
+        // the document's own spelling, so `10` missed a stored `10.0`). The
+        // fused walk carries the typed needle; it has the same array, dotted
+        // path and analyzed-text bailouts.
+        QueryNode::Term {
+            value: Value::Number(_),
+            ..
+        } => mem.doc_values_bool_query(&mem_bool_preds(q)?, limit),
+        QueryNode::Terms { values, .. } if values.iter().any(Value::is_number) => {
+            mem.doc_values_bool_query(&mem_bool_preds(q)?, limit)
+        }
         QueryNode::Term { field, value, .. } => {
             // Skip if the value is complex or the field uses CIDR notation.
             let val_str = match value {
@@ -49838,6 +49942,57 @@ fn dis_max_mem_fts_subs(q: &QueryNode) -> Option<(Vec<(&str, &str, f32)>, f32)> 
             .map(|subs| (subs, *tie_breaker)),
         _ => None,
     }
+}
+
+/// The lone `must` match's `(field, query)` and the non-scoring gate of a
+/// `bool{must:[match], filter:[..], must_not:[..]}` whose `must` clause would
+/// take the standalone-`Match` memtable FTS arm on its own (#2403): same
+/// carve-outs as that arm (`is_doc_scan_query` and `extract_query_text`), no
+/// per-query `analyzer`, no `should`, no `minimum_should_match`, and at least
+/// one `filter` or `must_not` clause (a lone `must` is already erased by
+/// `unwrap_single_clause_bool`). The gate is a `bool` holding only the
+/// `filter` and `must_not` clauses, evaluated per hit by the stored-doc
+/// matcher, so membership stays what the doc-scan route enforced. Any other
+/// shape answers `None` and keeps its existing route.
+fn bool_filter_mem_fts_must(q: &QueryNode) -> Option<(&str, &str, &QueryNode, QueryNode)> {
+    let QueryNode::Bool {
+        must,
+        should,
+        must_not,
+        filter,
+        minimum_should_match: None,
+    } = q
+    else {
+        return None;
+    };
+    if must.len() != 1 || !should.is_empty() || (filter.is_empty() && must_not.is_empty()) {
+        return None;
+    }
+    let clause = &must[0];
+    // A per-query `analyzer` declines: the memtable FTS path tokenizes with
+    // the index default, while the stored-doc matcher and the segment
+    // projection honour it, so taking this arm would change the hit set at
+    // flush.
+    let QueryNode::Match {
+        field,
+        query,
+        analyzer: None,
+        ..
+    } = clause
+    else {
+        return None;
+    };
+    if is_doc_scan_query(clause) || extract_query_text(clause).is_none() {
+        return None;
+    }
+    let gate = QueryNode::Bool {
+        must: Vec::new(),
+        should: Vec::new(),
+        must_not: must_not.clone(),
+        filter: filter.clone(),
+        minimum_should_match: None,
+    };
+    Some((field.as_str(), query.as_str(), clause, gate))
 }
 
 /// Erase `bool` wrappers whose only clause is a single SCORING clause.
@@ -55268,6 +55423,17 @@ fn json_scalar_equal(dv: &Value, query_val: &Value) -> bool {
     }
     // Cross-type: number stored as string or vice versa.
     match (dv, query_val) {
+        // Two JSON numbers compare by value: serde_json's `Number` equality
+        // is representational, so a stored `10.0` was not equal to a queried
+        // `10`. Integers compare exactly (above 2^53 an f64 round-trip would
+        // merge neighbours); anything else compares as f64.
+        (Value::Number(a), Value::Number(b)) => match (a.as_i64(), b.as_i64()) {
+            (Some(x), Some(y)) => x == y,
+            _ => match (a.as_u64(), b.as_u64()) {
+                (Some(x), Some(y)) => x == y,
+                _ => a.as_f64() == b.as_f64(),
+            },
+        },
         (Value::String(s), Value::Number(n)) => s.parse::<f64>().ok() == n.as_f64(),
         (Value::Number(n), Value::String(s)) => n.as_f64() == s.parse::<f64>().ok(),
         // Cross-type: a boolean and its string spelling name the same
@@ -55691,6 +55857,7 @@ fn collect_fts_query_fields(q: &FtsQuery, out: &mut Vec<String>) {
         // queried field" gate to check.
         FtsQuery::DocScores(_) => {}
         FtsQuery::MatchAll => {}
+        FtsQuery::ConstantScore(c) => collect_fts_query_fields(&c.query, out),
     }
 }
 
@@ -55752,6 +55919,9 @@ fn collect_fts_query_terms(q: &FtsQuery, out: &mut Vec<(String, String)>) {
                 collect_fts_query_terms(sub, out);
             }
         }
+        // Non-scoring like `filter`, but still executed: collected for the
+        // same reason.
+        FtsQuery::ConstantScore(c) => collect_fts_query_terms(&c.query, out),
     }
 }
 
@@ -56066,18 +56236,27 @@ fn query_node_to_fts_projected(
         }
         QueryNode::MatchNone => None,
         // `constant_score`: MATCHING is the inner query's (so text filters
-        // keep the inverted-index path); the wrapper's constant score is
-        // applied post-hoc by the top-level override in `search` (the
-        // keyword-schema shape is served bit-exactly by `scored_columnar`
-        // before this projection is ever consulted).
-        QueryNode::Constant { query, .. } => query_node_to_fts_projected(
+        // keep the inverted-index path), and every match scores exactly the
+        // wrapper's boost. #2654: this used to return the inner projection
+        // bare and rely on the top-level override in `search`, which only
+        // sees a top-level `constant_score`; nested in a `bool` on flushed
+        // segments, the clause added the inner BM25 instead of the boost.
+        // (The keyword-schema shape is served bit-exactly by
+        // `scored_columnar` before this projection is ever consulted.)
+        QueryNode::Constant { query, score } => query_node_to_fts_projected(
             query,
             text_fields,
             exact_fields,
             keyword_fields,
             binding,
             pinned,
-        ),
+        )
+        .map(|inner| {
+            FtsQuery::ConstantScore(Box::new(xerj_fts::search::ConstantScoreQuery {
+                query: inner,
+                score: *score,
+            }))
+        }),
         QueryNode::Match {
             field,
             query,

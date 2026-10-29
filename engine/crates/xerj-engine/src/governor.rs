@@ -379,6 +379,9 @@ pub struct ResourceGovernor {
     /// How long a search over the hard limit waits for the drain (#2427).
     /// [`SEARCH_HEADROOM_WAIT`] in production; tests shorten it.
     search_headroom_wait: Duration,
+    /// Bound on a lone background merge's wait for headroom (#2427).
+    /// `merge_budget::MERGE_HEADROOM_MAX_WAIT` in production.
+    merge_headroom_max_wait: Duration,
 
     // ── item 2b: global bulk pool (concurrent bulk parse cap) ─────────
     /// Global bulk-concurrency permits. Caps the number of concurrent
@@ -733,6 +736,27 @@ impl ResourceGovernor {
         let observed = self.observed_process_memory();
         let engaged = self.memory_breaker_engaged();
         let mut ledger = self.merge_ledger.lock().unwrap_or_else(|e| e.into_inner());
+        // #2427 ingest overshoot: a lone background batch does not start
+        // inside the read reserve; it waits (bounded) for the drain. See
+        // `merge_budget::lone_merge_waits_for_headroom`.
+        if !forced && ledger.in_flight == 0 && watermark > 0 && observed >= watermark {
+            let since = *ledger
+                .headroom_wait_since
+                .get_or_insert_with(std::time::Instant::now);
+            if crate::merge_budget::lone_merge_waits_for_headroom(
+                observed,
+                watermark,
+                ledger.in_flight,
+                forced,
+                since.elapsed(),
+                self.merge_headroom_max_wait,
+            ) {
+                return None;
+            }
+        } else if observed < watermark {
+            // Headroom came back: the next wait starts its own clock.
+            ledger.headroom_wait_since = None;
+        }
         if !crate::merge_budget::decide_merge_admission(
             watermark,
             observed,
@@ -746,6 +770,7 @@ impl ResourceGovernor {
         }
         ledger.reserved = ledger.reserved.saturating_add(bytes);
         ledger.in_flight += 1;
+        ledger.headroom_wait_since = None;
         Some(MergeReservation {
             ledger: Arc::clone(&self.merge_ledger),
             bytes,
@@ -755,12 +780,23 @@ impl ResourceGovernor {
     /// Whether an in-flight background merge batch must stop now (#2427).
     /// See `merge_budget::merge_must_yield`.
     pub fn merge_must_yield(&self, forced: bool) -> bool {
+        let observed = self.observed_process_memory();
         crate::merge_budget::merge_must_yield(
-            self.observed_process_memory(),
+            observed,
             self.merge_pool_ceiling_bytes(),
-            self.memory_breaker_engaged(),
+            self.merge_memory_pressure(observed),
             forced,
         )
+    }
+
+    /// Whether merges see memory pressure at `observed` bytes (#2427): the
+    /// breaker is engaged, or `observed` is already at the watermark and the
+    /// 100 ms sampler has not latched it yet. A merge checks live process
+    /// memory, so it need not run on for up to a sampler tick past the
+    /// watermark.
+    fn merge_memory_pressure(&self, observed: u64) -> bool {
+        let watermark = self.memory_watermark_bytes();
+        self.memory_breaker_engaged() || (watermark > 0 && observed >= watermark)
     }
 
     /// [`Self::merge_must_yield`] for a batch of `input_bytes`: after a
@@ -772,10 +808,11 @@ impl ResourceGovernor {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .yield_streak;
+        let observed = self.observed_process_memory();
         crate::merge_budget::merge_must_yield_after(
-            self.observed_process_memory(),
+            observed,
             self.merge_pool_ceiling_bytes(),
-            self.memory_breaker_engaged(),
+            self.merge_memory_pressure(observed),
             forced,
             input_bytes,
             streak,
@@ -1557,6 +1594,32 @@ fn tiered_cap_mb(effective_bytes: u64) -> u64 {
     }
 }
 
+/// Startup warning when the machine has less memory free right now than
+/// the cap this node just chose (#2574). The cap is sized from total RAM (or
+/// the cgroup limit), so the friendly "detected N usable" line reads as if
+/// availability had been checked. On a box where another process already
+/// holds most of the RAM (a local LLM engine, say) the node will be swapped
+/// or OOM-killed before its own breaker trips. `None` when availability is
+/// unknown, when there is no cap, or when there is room for it.
+fn available_memory_startup_line(
+    available: Option<u64>,
+    effective: u64,
+    limit: u64,
+) -> Option<String> {
+    let available = available?;
+    if limit == 0 || available >= limit {
+        return None;
+    }
+    Some(format!(
+        "memory: only {} of {} is available right now — other processes hold the rest — \
+         which is less than the {} cap; if they keep it, lower limits.max_process_memory_mb \
+         or XERJ_MAX_PROCESS_MEMORY_MB to fit what is left",
+        format_gib(available),
+        format_gib(effective),
+        format_gib(limit),
+    ))
+}
+
 /// Human-friendly binary size for the startup line: whole GiB when exact, one
 /// decimal when not, and MiB below 1 GiB. Presentation only.
 fn format_gib(bytes: u64) -> String {
@@ -1927,6 +1990,13 @@ fn build(config: &Config) -> ResourceGovernor {
             cap_reason,
         );
     }
+    if let Some(line) = available_memory_startup_line(
+        xerj_common::resource::available_memory_bytes(),
+        effective_memory_bytes,
+        memory_limit_bytes,
+    ) {
+        tracing::warn!("{line}");
+    }
     if startup_starved {
         tracing::warn!(
             "Windows has no commit left under the reserve — writes will be rejected until \
@@ -1996,6 +2066,7 @@ fn build(config: &Config) -> ResourceGovernor {
         search_inflight_peak: Arc::new(AtomicU64::new(0)),
         search_pressure: Arc::new(Semaphore::new(1)),
         search_headroom_wait: SEARCH_HEADROOM_WAIT,
+        merge_headroom_max_wait: crate::merge_budget::MERGE_HEADROOM_MAX_WAIT,
         bulk_pool: Arc::new(Semaphore::new(max_concurrent_bulks)),
         max_concurrent_bulks,
         disk_flood_pct_default: limits.disk_flood_stage_percent.min(100),
@@ -2430,6 +2501,10 @@ struct MergeLedger {
     /// Background yields since the last completed batch. See
     /// `merge_budget::merge_must_yield_after`.
     yield_streak: u64,
+    /// When a lone background merge was first held back for headroom
+    /// since the last admitted batch. See
+    /// `merge_budget::lone_merge_waits_for_headroom`.
+    headroom_wait_since: Option<std::time::Instant>,
 }
 
 /// Holds one merge batch's estimated working set against the RSS watermark
@@ -2586,6 +2661,31 @@ fn human_bytes(b: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #2574: a 125 GiB box with ~40 GiB free took the 16 GiB auto tier and
+    /// said only "detected 125.4 GiB usable". Warn when the cap is above
+    /// what is free; stay quiet when there is room or nothing is known.
+    #[test]
+    fn startup_warns_when_free_memory_is_below_the_cap() {
+        const GIB: u64 = 1024 * 1024 * 1024;
+        let line = available_memory_startup_line(Some(10 * GIB), 100 * GIB, 16 * GIB)
+            .expect("10 GiB free under a 16 GiB cap must warn");
+        assert!(
+            line.contains("only 10 GiB of 100 GiB is available"),
+            "{line}"
+        );
+        assert!(line.contains("16 GiB cap"), "{line}");
+        assert!(line.contains("limits.max_process_memory_mb"), "{line}");
+        assert_eq!(
+            available_memory_startup_line(Some(40 * GIB), 125 * GIB, 16 * GIB),
+            None
+        );
+        assert_eq!(
+            available_memory_startup_line(None, 125 * GIB, 16 * GIB),
+            None
+        );
+        assert_eq!(available_memory_startup_line(Some(GIB), 125 * GIB, 0), None);
+    }
 
     #[test]
     fn analyze_reservation_fits_under_the_watermark_and_rejects_at_it() {
@@ -4408,6 +4508,54 @@ mod tests {
         assert!(g.merge_must_yield_for(false, 512 * MIB));
         g.note_merge_completed(49 * MIB);
         assert!(g.merge_must_yield_for(false, 49 * MIB));
+    }
+
+    /// #2427 ingest overshoot: on the 1 GB gate every over-cap sample on the
+    /// ingest node was a pg-docs batch launched alone the moment the last one
+    /// finished, with RSS already at 2.4-2.9 GB. A lone background batch now
+    /// waits while RSS is at or above the merge-pool ceiling, starts once the
+    /// drain brings it under, and never waits past the bound.
+    #[test]
+    fn a_lone_background_merge_waits_for_headroom_under_the_merge_pool() {
+        let mut cfg = Config::default();
+        cfg.limits.max_total_memtable_mb = 0;
+        cfg.limits.memory_watermark_percent = 95;
+        let mut g = build(&cfg);
+        let wm = g.memory_watermark_bytes();
+        let ceiling = g.merge_pool_ceiling_bytes();
+        assert!(
+            wm > 0 && ceiling > 0 && ceiling < wm,
+            "this test needs a live RSS watermark"
+        );
+
+        // Inside the read reserve, under the watermark: not engaged, but the
+        // lone background batch waits. `_forcemerge` does not.
+        let high = (ceiling + wm) / 2;
+        g.refresh(0, high, 0);
+        assert!(!g.memory_breaker_engaged());
+        assert!(g.try_reserve_merge(1, false).is_none());
+        let forced = g
+            .try_reserve_merge(1, true)
+            .expect("forcemerge never waits");
+        drop(forced);
+        assert!(g.try_reserve_merge(1, false).is_none());
+
+        // The drain brings RSS under the ceiling: it starts, and the wait
+        // clock resets.
+        g.refresh(0, ceiling / 2, 0);
+        let first = g
+            .try_reserve_merge(1, false)
+            .expect("starts after the drain");
+        drop(first);
+        assert!(g.merge_ledger.lock().unwrap().headroom_wait_since.is_none());
+
+        // The wait is bounded: past it, a lone batch starts even inside the
+        // reserve, so a node whose live set sits there still compacts.
+        g.merge_headroom_max_wait = Duration::ZERO;
+        g.refresh(0, high, 0);
+        assert!(!g.memory_breaker_engaged());
+        let late = g.try_reserve_merge(1, false).expect("bounded wait");
+        drop(late);
     }
 
     /// #2427: the merge output-write step (doc-values build, stored encode,

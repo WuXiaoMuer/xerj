@@ -52,6 +52,7 @@ pub mod search;
 pub mod sessions;
 pub mod sniff;
 pub mod source;
+mod stage;
 pub mod staleness;
 pub mod state;
 mod sync;
@@ -64,7 +65,7 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::io::{BufRead, BufReader, Seek, Write};
+use std::io::{BufRead, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Condvar, Mutex};
@@ -1501,7 +1502,7 @@ pub(crate) fn is_stale_resume_skip(junk: &JunkFile) -> bool {
 /// note still lists up to [`REFUSAL_LIST_CAP`].
 const STALE_RESUME_SUMMARY_CAP: usize = 5;
 
-/// Recovery sentence shared by the `ok:` headline, the path list, and the JSON field.
+/// Recovery sentence shared by the headline, the path list, and the JSON field.
 ///
 /// One sentence, so the summary that names the paths also says `--fresh`
 /// right there (#2372).
@@ -1526,7 +1527,7 @@ fn stale_resume_appeared_paths(junk: &[&JunkFile]) -> Vec<String> {
 
 /// Human lines for the stale-resume-plan summary.
 ///
-/// The `ok:` headline stays one line. These sit under it and name the files,
+/// The headline stays one line. These sit under it and name the files,
 /// because a count alone sent an agent back to `--help` to find out what was
 /// skipped (#2372). Empty when nothing appeared, so a clean run's summary is
 /// unchanged.
@@ -1774,7 +1775,10 @@ fn generated_exit_code(summary: &Value) -> i32 {
 /// mentioned the exit code at all. A finished run leads with one line that
 /// starts `ok:` and names the exit code in words; exit 3 also says what was
 /// recorded and where to look, so junk stays visible. A family-wide PDF
-/// worker startup failure (#2336) leads with `not ok:` and exit 1.
+/// worker startup failure (#2336) leads with `not ok:` and exit 1. So does an
+/// index that does not cover the folder because a stale resume plan skipped
+/// files (#2411): exit 3, `ok=false`, and the line says the skipped files are
+/// not searchable.
 pub(crate) fn outcome_headline(
     code: i32,
     junk_files: u64,
@@ -1796,9 +1800,14 @@ pub(crate) fn outcome_headline(
     }
     if stale_plan_files > 0 {
         let files = estimate::count_phrase(stale_plan_files, "file", "files");
+        // #2411: `not ok:`, not `ok:`. The run finished and exit 3 is not an
+        // error, but the index does not cover the folder, and the `ok:` prefix
+        // was read as "this folder is searchable" by a caller that then saw
+        // four of its five files missing from results.
         let mut line = format!(
-            "ok: indexed and searchable — exit 3 ({STALE_RESUME_PLAN_REASON}): {files} skipped \
-             because the resumed plan is stale and were not indexed. {STALE_RESUME_SUMMARY_ACTION}"
+            "not ok: the index does not cover this folder — exit 3 \
+             ({STALE_RESUME_PLAN_REASON}): {files} skipped because the resumed plan is stale and \
+             were not indexed, so they are not searchable. {STALE_RESUME_SUMMARY_ACTION}"
         );
         if junk_files > 0 || junk_records > 0 {
             let mut recorded = Vec::new();
@@ -6515,6 +6524,72 @@ impl std::fmt::Display for ZeroLiveVerificationError {
 
 impl std::error::Error for ZeroLiveVerificationError {}
 
+/// A dataset index the resume journal says received records, and that answers
+/// with zero live documents.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct EmptyDataset {
+    index: String,
+    /// Exact only when every contributing file targets this dataset alone.
+    /// A file-wide journal count cannot be copied into several dataset totals.
+    records: Option<u64>,
+    files: usize,
+}
+
+/// The per-dataset half of the #195 gate (#2407). Summing live documents over
+/// every dataset let a populated sibling hide an index that held nothing, so a
+/// re-run reported `ok: indexed and searchable` over an empty `-docs` index.
+///
+/// The journal keeps one record count per file, and a file's groups can feed
+/// several datasets, so records are attributed to a file's datasets only as a
+/// set: a completed file with records is missing when EVERY dataset it feeds
+/// answers zero. A dataset with no count (refused, or the count did not
+/// answer) is unknown, not empty, and never makes a file missing.
+fn datasets_left_empty(
+    plan: &Plan,
+    done: &HashMap<String, FileDone>,
+    ds_counts: &HashMap<String, u64>,
+    excluded_file_keys: &HashSet<String>,
+) -> Vec<EmptyDataset> {
+    let mut empty: BTreeMap<String, (Option<u64>, usize)> = BTreeMap::new();
+    for (key, file) in done {
+        if file.records == 0 || excluded_file_keys.contains(key) {
+            continue;
+        }
+        let Some(assignment) = plan.files.get(key) else {
+            continue;
+        };
+        let slugs: BTreeSet<&str> = assignment
+            .assignments
+            .iter()
+            .map(|(_, slug)| slug.as_str())
+            .collect();
+        if slugs.is_empty() || !slugs.iter().all(|slug| ds_counts.get(*slug) == Some(&0)) {
+            continue;
+        }
+        let records = (slugs.len() == 1).then_some(file.records);
+        for slug in slugs {
+            let entry = empty.entry(slug.to_string()).or_insert((Some(0), 0));
+            entry.0 = entry
+                .0
+                .zip(records)
+                .and_then(|(total, n)| total.checked_add(n));
+            entry.1 += 1;
+        }
+    }
+    plan.datasets
+        .iter()
+        .filter_map(|dataset| {
+            empty
+                .get(&dataset.slug)
+                .map(|(records, files)| EmptyDataset {
+                    index: dataset.index.clone(),
+                    records: *records,
+                    files: *files,
+                })
+        })
+        .collect()
+}
+
 #[derive(Debug)]
 struct UnsupportedInventoryDeltaError {
     delta: UnsupportedInventoryDelta,
@@ -9396,6 +9471,9 @@ fn run_index_report_inner(
     // dropped from the resumed plan so the second gate does not see them.
     let mut swept_membership = false;
     let mut deleted_file_keys: HashSet<String> = HashSet::new();
+    // Excluded files intentionally lose their live documents but retain plan
+    // identity for future inclusion. They are not missing-write evidence.
+    let mut excluded_file_keys: HashSet<String> = HashSet::new();
     if let Some(prior_plan) = preflight.plan.as_ref() {
         let comparison_keys = if cfg.fresh {
             inventory.keys.clone()
@@ -9473,6 +9551,12 @@ fn run_index_report_inner(
                 chrono::Utc::now().timestamp_millis(),
             )
             .context("sweep newly-excluded content groups")?;
+            excluded_file_keys.extend(
+                delta
+                    .excluded_content_groups
+                    .iter()
+                    .map(|entry| entry.file_key.clone()),
+            );
         }
     }
     // #736: snapshot the PRIOR plan's anchor nodes HERE, before the journal is
@@ -9868,6 +9952,12 @@ fn run_index_report_inner(
                 chrono::Utc::now().timestamp_millis(),
             )
             .context("sweep newly-excluded content groups")?;
+            excluded_file_keys.extend(
+                delta
+                    .excluded_content_groups
+                    .iter()
+                    .map(|entry| entry.file_key.clone()),
+            );
         }
     }
 
@@ -10871,10 +10961,7 @@ fn run_index_report_inner(
             // only source that can name a PDF page boundary's
             // predecessor (p2-s0 follows the LAST section of page 1).
             let mut prev_section: Option<(String, String)> = None;
-            let mut staged = match tempfile::Builder::new()
-                .prefix(".autoindex-stage-")
-                .tempfile_in(&state_dir)
-            {
+            let mut staged = match stage::Stage::create_in(&state_dir) {
                 Ok(file) => file,
                 Err(error) => {
                     let mut errors = bulk_errors.lock().unwrap();
@@ -10939,12 +11026,9 @@ fn run_index_report_inner(
                         align_hit_locators(&mut fields, &f.rel);
                         let action = json!({"index": {
                                     "_index": rt.index, "_id": cf.anchor_doc_id}});
-                        if let Err(error) = writeln!(
-                            staged.as_file_mut(),
-                            "{}\n{}",
-                            action,
-                            Value::Object(fields)
-                        ) {
+                        if let Err(error) =
+                            writeln!(&mut staged, "{}\n{}", action, Value::Object(fields))
+                        {
                             send_err = Some(format!("stage file card for {}: {error}", f.rel));
                         }
                     }
@@ -11038,7 +11122,7 @@ fn run_index_report_inner(
                     let action = json!({"index": {"_index": rt.index, "_id": id}});
                     let doc = Value::Object(fields);
                     if let Err(error) = writeln!(
-                        staged.as_file_mut(),
+                        &mut staged,
                         "{}\n{}",
                         action,
                         serde_json::to_string(&doc).unwrap_or_else(|_| "{}".into())
@@ -11278,9 +11362,28 @@ fn run_index_report_inner(
                     continue;
                 }
             }
+            // Finish buffered compression before the first remote mutation.
+            // ENOSPC can surface here even when every earlier write succeeded;
+            // keep the previous records live and the replacement pending then.
+            // Reference: tantivy 3a55bc98, src/directory/mmap_directory/mod.rs:
+            // 372-376 flushes the temporary writer before publishing its file.
+            // The stage is consumed here whether or not the send runs: an
+            // early error drops it, and the unnamed file goes with it.
+            let staged_len = staged.raw_bytes();
+            let mut reader = None;
+            if send_err.is_none() {
+                match staged.into_reader() {
+                    Ok((r, _disk)) => reader = Some(r),
+                    Err(error) => {
+                        send_err = Some(format!("finish staged records for {}: {error}", f.rel));
+                    }
+                }
+            } else {
+                drop(staged);
+            }
             // Visibility begins only after extraction and the second
-            // full-content verification. Delete-before-replace makes
-            // a retry clean up any partial prior attempt.
+            // full-content verification and stage finalization.
+            // Delete-before-replace makes a retry clean up any partial prior attempt.
             if send_err.is_none() && cleanup_required.contains(key) {
                 let prior = superseded.get(&f.rel);
                 let mut indices: Vec<String> = fa
@@ -11314,12 +11417,7 @@ fn run_index_report_inner(
                     }
                 }
             }
-            if send_err.is_none() {
-                if let Err(error) = staged.as_file_mut().rewind() {
-                    send_err = Some(format!("rewind staged records for {}: {error}", f.rel));
-                }
-            }
-            if send_err.is_none() {
+            if let Some(mut reader) = reader.filter(|_| send_err.is_none()) {
                 // The second half of a mailbox's bar: staged bytes
                 // handed to the engine, out of staged bytes in total.
                 // Credit is taken at submission: the shared buffer
@@ -11327,9 +11425,7 @@ fn run_index_report_inner(
                 // flush carries them, and the bar measures reading
                 // work, not wire time.
                 let credit_send = sn.family == Family::Mbox;
-                let staged_len = staged.as_file().metadata().map(|m| m.len()).unwrap_or(0);
                 let mut staged_sent = 0u64;
-                let mut reader = BufReader::new(staged.as_file_mut());
                 // A LOCAL chunk, not the bulk: chunks join whatever
                 // the other workers are staging in the shared buffer,
                 // so a small file stops paying for its own round-trip.
@@ -11790,8 +11886,9 @@ fn run_index_report_inner(
     // "the corpus has no match" from "nothing was ever written". This is
     // the last-resort catch for any rejection path the per-bulk
     // classification does not recognise.
-    let (files_done_journaled, journal_records) = {
+    let (files_done_journaled, journal_records, left_empty) = {
         let journal = journal_mx.lock().unwrap();
+        let left_empty = datasets_left_empty(&plan, &journal.done, &ds_counts, &excluded_file_keys);
         // #2314: a file swept because it left the folder is still in
         // `journal.done` until the next plan write forgets to republish it.
         // Those records are supposed to be gone. Counting them made a folder
@@ -11799,18 +11896,19 @@ fn run_index_report_inner(
         let mut files_done_journaled = 0usize;
         let mut journal_records = 0u64;
         for (key, done) in &journal.done {
-            if plan.files.contains_key(key) {
+            if plan.files.contains_key(key) && !excluded_file_keys.contains(key) {
                 files_done_journaled += 1;
                 journal_records += done.records;
             }
         }
-        (files_done_journaled, journal_records)
+        (files_done_journaled, journal_records, left_empty)
     };
     let live_records: u64 = ds_counts.values().sum();
     if !count_unknown.is_empty() {
         pr.warn(&format!(
             "finalize-count: {} dataset index(es) did not answer a count, so the \
-             zero-live check was not applied. The journal records {journal_records} \
+             all-indices zero-live check was not applied. Independently confirmed \
+             empty datasets are still checked. The journal records {journal_records} \
              record(s). {}",
             count_unknown.len(),
             count_unknown.join(" | ")
@@ -11832,6 +11930,36 @@ fn run_index_report_inner(
             state_dir: state_dir.display().to_string(),
         }
         .into());
+    }
+    if !left_empty.is_empty() {
+        // A confirmed empty target still matters when another count is unknown.
+        // This is not evidence that the entire destination was wiped.
+        let named: Vec<String> = left_empty
+            .iter()
+            .map(|d| match d.records {
+                Some(records) => format!(
+                    "{} ({} record(s) from {} file(s))",
+                    d.index, records, d.files
+                ),
+                None => format!(
+                    "{} ({} contributing file(s); record count not attributable per dataset)",
+                    d.index, d.files
+                ),
+            })
+            .collect();
+        anyhow::bail!(
+            "autoindex verification failed: {} of the {} dataset index(es) hold 0 live \
+             documents although completed files have journaled records and every target \
+             of those files returned zero: {}. Counts from files shared by several \
+             datasets cannot be assigned to a particular target. Other datasets may be \
+             live or unverified; the run is not reported as indexed. Check server-side \
+             write refusals and whether the target indices were deleted. Journal \
+             state dir: {}. Fix the cause, then rerun with --fresh to re-index from scratch",
+            left_empty.len(),
+            plan.datasets.len(),
+            named.join(", "),
+            state_dir.display()
+        );
     }
 
     // correlations
@@ -12721,8 +12849,12 @@ fn run_index_report_inner(
     if !appeared_json.is_empty() {
         pr.set_done_json(appeared_json.clone());
     }
+    // #2411: new files absent from a frozen plan need a rebuild. Do not mark
+    // that stale-plan outcome ok. Other exit-3 outcomes still use their existing
+    // flags (for example datasets_refused); ok alone is not full coverage.
+    let complete = pdf_worker_unavailable.is_none() && skipped_appeared == 0;
     pr.finish(
-        pdf_worker_unavailable.is_none(),
+        complete,
         code,
         // A worker that cannot start wins the `reason`: exit 3 would call a
         // missing PDF family success (#2336). A stale plan is next, because
@@ -12988,6 +13120,7 @@ fn run_remove(cfg: cli::RemoveCfg) -> Result<i32> {
         yes: cfg.yes,
         prompt,
         state_dir: cfg.state_dir,
+        uncataloged: cfg.uncataloged,
     })?;
     println!(
         "{}",
@@ -13014,7 +13147,15 @@ fn run_map(cfg: MapCfg) -> Result<i32> {
         if let Some(s) = sort {
             body["sort"] = s;
         }
-        let v = es.search(catalog::CATALOG_INDEX, &body)?;
+        let v = es
+            .search_present(catalog::CATALOG_INDEX, &body)?
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "autoindex catalog {} is missing (HTTP 404). {}",
+                    catalog::CATALOG_INDEX,
+                    catalog::MAP_NAMESPACE_HINT
+                )
+            })?;
         Ok(v.pointer("/hits/hits")
             .and_then(|h| h.as_array())
             .map(|arr| {
@@ -13046,17 +13187,18 @@ fn run_map(cfg: MapCfg) -> Result<i32> {
     if datasets.is_empty() {
         if let Some(prefix) = cfg.prefix.as_deref() {
             eprintln!(
-                "no autoindex catalog found for --prefix {prefix} at {} (index {}) — run `xerj autoindex <folder> --prefix {prefix}` first",
+                "no autoindex datasets match --prefix {prefix} at {} (catalog {})",
                 cfg.url,
                 catalog::CATALOG_INDEX
             );
         } else {
             eprintln!(
-                "no autoindex catalog found at {} (index {}) — run `xerj autoindex <folder>` first",
+                "no autoindex datasets match at {} (catalog {})",
                 cfg.url,
                 catalog::CATALOG_INDEX
             );
         }
+        eprintln!("{}", catalog::MAP_NAMESPACE_HINT);
         return Ok(1);
     }
     let mut run_must = vec![json!({"term": {"doc_kind": "run"}})];
@@ -14600,6 +14742,110 @@ mod map_metadata_tests {
         }
     }
 
+    fn dataset(slug: &str) -> PlanDataset {
+        PlanDataset {
+            slug: slug.into(),
+            index: format!("ax-{slug}"),
+            family: "text".into(),
+            group: None,
+            specs: vec![],
+            time_field: None,
+            semantic_field: None,
+            text_analyzer: None,
+            scope: None,
+            sampled_records: 1,
+            file_count: 1,
+        }
+    }
+
+    fn done(key: &str, records: u64) -> (String, FileDone) {
+        (
+            key.into(),
+            FileDone {
+                file_key: key.into(),
+                path: format!("{key}.dat"),
+                records,
+                junk: 0,
+                bytes: 1,
+                dropped_by_dataset: HashMap::new(),
+                generation: None,
+            },
+        )
+    }
+
+    /// #2407: a live sibling must not hide a dataset that holds nothing. The
+    /// prose file wrote only to `docs`, which answers 0 while `json` is live.
+    /// A file that also feeds a live dataset cannot be shown missing (the
+    /// journal has one count per file), and a dataset with no count is
+    /// unknown, not empty.
+    #[test]
+    fn a_dataset_left_empty_beside_a_live_sibling_is_named() {
+        let plan = Plan {
+            datasets: vec![dataset("docs"), dataset("json"), dataset("mixed")],
+            files: HashMap::from([
+                ("prose-1".into(), assignment(&["docs"])),
+                ("prose-2".into(), assignment(&["docs"])),
+                ("rows".into(), assignment(&["json"])),
+                ("both".into(), assignment(&["mixed", "json"])),
+                ("unknown".into(), assignment(&["refused"])),
+            ]),
+            ..Plan::default()
+        };
+        let journal = HashMap::from([
+            done("prose-1", 3),
+            done("prose-2", 2),
+            done("rows", 120),
+            done("both", 4),
+            done("unknown", 9),
+            // Swept from the folder: in the journal, not in the plan (#2314).
+            done("gone", 7),
+        ]);
+        let counts = HashMap::from([
+            ("docs".to_string(), 0),
+            ("json".to_string(), 120),
+            ("mixed".to_string(), 0),
+        ]);
+        assert_eq!(
+            datasets_left_empty(&plan, &journal, &counts, &HashSet::new()),
+            [EmptyDataset {
+                index: "ax-docs".into(),
+                records: Some(5),
+                files: 2,
+            }]
+        );
+
+        let deliberately_excluded = HashSet::from(["prose-1".into(), "prose-2".into()]);
+        assert!(
+            datasets_left_empty(&plan, &journal, &counts, &deliberately_excluded).is_empty(),
+            "intentional exclusion sweeps are not missing writes"
+        );
+
+        // Every dataset live: nothing to name.
+        let live = HashMap::from([
+            ("docs".to_string(), 5),
+            ("json".to_string(), 120),
+            ("mixed".to_string(), 0),
+        ]);
+        assert!(datasets_left_empty(&plan, &journal, &live, &HashSet::new()).is_empty());
+
+        // A file whose every dataset is empty names each of them.
+        let both_empty = HashMap::from([
+            ("docs".to_string(), 5),
+            ("json".to_string(), 0),
+            ("mixed".to_string(), 0),
+        ]);
+        let ambiguous = datasets_left_empty(&plan, &journal, &both_empty, &HashSet::new());
+        assert!(
+            ambiguous.iter().all(|dataset| dataset.records.is_none()),
+            "one file's shared count must not be duplicated into each dataset: {ambiguous:?}"
+        );
+        let named: Vec<String> = datasets_left_empty(&plan, &journal, &both_empty, &HashSet::new())
+            .into_iter()
+            .map(|d| d.index)
+            .collect();
+        assert_eq!(named, ["ax-json", "ax-mixed"]);
+    }
+
     #[test]
     fn unchanged_resume_keeps_durable_assignment_aware_dataset_bytes() {
         let _guard = state::FILE_DONE_IO_FAILPOINT_TEST_LOCK
@@ -14988,6 +15234,12 @@ mod generation_contract_identity_tests {
         );
 
         let stale = outcome_headline(3, 0, 0, false, 2, None, 0);
+        // #2411: the prefix is the contract. `ok:` says "this folder is
+        // searchable"; a stale plan leaves files on disk out of the index, so
+        // the line must not claim that.
+        assert!(stale.starts_with("not ok:"), "{stale}");
+        assert!(stale.contains("does not cover this folder"), "{stale}");
+        assert!(stale.contains("not searchable"), "{stale}");
         assert!(stale.contains("exit 3 (stale-resume-plan)"), "{stale}");
         assert!(
             stale.contains("2 files skipped because the resumed plan is stale"),
