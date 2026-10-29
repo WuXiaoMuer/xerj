@@ -233,6 +233,20 @@ PAGES: dict[str, dict[str, str]] = {
     # Tag census: 97 v1.0.0-rc.* tags through rc.98 (rc.79 never tagged),
     # so rc.99 is the 98th tagged release. The post says "just over 100
     # days since rc.1" and does not print a day count taken from the tag date.
+    # Milestone post, 2026-10-29. Every figure fact-checked live on 2026-10-29:
+    # 17,478 stars (gh api repos/xerj-org/xerj); 100 contributors = GitHub
+    # contributors?anon=1 (103 entries) minus xerj-org, noreply@xerj.org and
+    # dependabot; #1 Rust repo of the day and week = Trendshift badges for repo
+    # 116361 (GitHub Trending Rust #1 first on 2026-10-15); 7,226 = hub.xerj.org
+    # /contributors/. Owner's "almost 10k" hub figure was not used (live: 7,226).
+    "blog/100-contributors.html": dict(
+        label="Milestone", kind="article",
+        title="XERJ at 100 contributors: the search engine for AI agents",
+        description="XERJ, the search engine for AI agents, now has 100 contributors and 17,478 GitHub stars. What it gives your agents today, and where it goes next.",
+        published="2026-10-29", updated="2026-10-29",
+        og_image="og/blog-100-contributors.png",
+        og_image_alt="Cover: “100 contributors” in display type beside the post’s square-matrix art, labelled 100 contributors and 7,226 Corpus Hub contributors. The art: a square wall of 100 yellow cells beside a wide field of 7,226 small ink cells on grid paper",
+    ),
     # Performance post, 2026-10-26: a standalone post (not a release post).
     # Owner asked for positive, improvement-first framing. Numbers are measured
     # (gate Run 6 vs rc.99 on the 1 GB corpus, and each fix's PR); the post
@@ -264,8 +278,8 @@ PAGES: dict[str, dict[str, str]] = {
     "blog/index.html": dict(
         label="Blog", kind="collection",
         title="XERJ.ai — Blog: the engineering log",
-        description="Faster autoindex and leaner indexes: the performance post, with each improvement explained. Also the rc.99 launch, Corpus Hub v2 and the exploit hub.",
-        updated="2026-10-26",
+        description="100 contributors and 17,478 stars: the XERJ milestone post. Also faster autoindex, the rc.99 launch, Corpus Hub v2 and the exploit hub.",
+        updated="2026-10-29",
     ),
     "demo/index.html": dict(
         label="Real-data demo", kind="software",

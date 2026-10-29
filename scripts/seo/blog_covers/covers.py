@@ -120,6 +120,11 @@ POSTS: list[dict[str, str]] = [
          subtitle="Leaner indexes and lighter memory, guided by your field reports.",
          alt="Cover art: 28 filled squares and 217 small empty rings scattered on grid paper, the filled ones joined by hairlines to a wide block of 454 empty cells, beside 32 yellow cells at the same pitch, then a gate of ink posts around two grey-blue columns and one empty yellow cell at its base",
          og_alt="Cover: “Faster autoindex” in display type beside the post’s square-matrix art, labelled 28 people + 217 agent reports, 454 indices, 32, and ES 9.05 · Lucene 25.4 MiB/s. The art: 28 filled squares and 217 small empty rings scattered on grid paper, the filled ones joined by hairlines to a wide block of 454 empty cells, beside 32 yellow cells at the same pitch, then a gate of ink posts around two grey-blue columns and one empty yellow cell at its base"),
+    dict(slug="100-contributors", date="2026-10-29", motif="milestone",
+         title="100 contributors",
+         subtitle="XERJ: the search engine for AI agents.",
+         alt="Cover art: a square wall of 100 yellow cells beside a wide field of 7,226 small ink cells on grid paper",
+         og_alt="Cover: “100 contributors” in display type beside the post’s square-matrix art, labelled 100 contributors and 7,226 Corpus Hub contributors. The art: a square wall of 100 yellow cells beside a wide field of 7,226 small ink cells on grid paper"),
 ]
 
 # og: title + motif with its labels, for social feeds that show the card alone.

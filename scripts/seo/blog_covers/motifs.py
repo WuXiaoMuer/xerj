@@ -631,6 +631,47 @@ def m_fieldgate(w: float, h: float, rng: random.Random) -> str:
     return "".join(out)
 
 
+def m_milestone(w: float, h: float, rng: random.Random) -> str:
+    """100-contributors.
+
+    Left, a 10 x 10 wall of 100 yellow cells: the 100 contributors on
+    GitHub's contributor list for xerj-org/xerj on 2026-10-29, without the
+    XERJ org account, the org's own commit address and the dependabot bot.
+    Right, a field of 7,226 small ink cells: the Corpus Hub contributors
+    that hub.xerj.org/contributors/ counted on the same day. rng decides
+    only the shade of each small cell, never how many there are.
+    """
+    out: list[str] = []
+    lab_h = 26.0 if LABELS else 0.0
+    top = 6.0
+    avail_h = h - top - lab_h
+    side = avail_h / 10
+    big_w = side * 10
+    gap = max(side * 1.2, 24.0)
+    field_w = w - big_w - gap
+    if field_w < w * 0.35:
+        side = (w * 0.4) / 10
+        big_w = side * 10
+        field_w = w - big_w - gap
+    for k in range(100):
+        i, j = k % 10, k // 10
+        out.append(dot(i * side + side / 2, top + j * side + side / 2, side * 0.40, "y"))
+    n = 7226
+    rows = max(1, int(math.sqrt(n * avail_h / field_w)))
+    cols = math.ceil(n / rows)
+    pitch = min(field_w / cols, avail_h / rows)
+    fx = big_w + gap
+    fy = top + (avail_h - rows * pitch) / 2
+    for k in range(n):
+        j, i = divmod(k, cols)
+        ink = "w" if rng.random() < 0.72 else "m"
+        out.append(dot(fx + i * pitch + pitch / 2, fy + j * pitch + pitch / 2, pitch * 0.36, ink))
+    ly = top + avail_h + 18
+    out.append(label(0, ly, "100 CONTRIBUTORS", "num y"))
+    out.append(label(fx, ly, "7,226 CORPUS HUB CONTRIBUTORS", "num w"))
+    return "".join(out)
+
+
 MOTIFS: dict[str, Callable[[float, float, random.Random], str]] = {
     "index28": m_index28,
     "jevbars": m_jevbars,
@@ -643,4 +684,5 @@ MOTIFS: dict[str, Callable[[float, float, random.Random], str]] = {
     "route": m_route,
     "budget": m_budget,
     "fieldgate": m_fieldgate,
+    "milestone": m_milestone,
 }
