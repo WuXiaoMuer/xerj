@@ -154,20 +154,32 @@ fn unreachable_node_hint_in(
 ) -> Option<String> {
     let port = crate::localauth::xerj_url_port(url);
     let data_dir = published_data_dir_in(home, port)?;
-    node_lock_hint(&data_dir, probe)
+    node_lock_hint(&data_dir, port, probe)
 }
 
 /// The hint for one data dir, from its `node.lock` PID.
-pub fn node_lock_hint(data_dir: &Path, probe: &dyn Fn(u32) -> PidState) -> Option<String> {
+///
+/// `port` is the port the node served; a non-default one is part of the
+/// restart command, or the restarted node would come back on 9200.
+pub fn node_lock_hint(
+    data_dir: &Path,
+    port: u16,
+    probe: &dyn Fn(u32) -> PidState,
+) -> Option<String> {
     let lock = data_dir.join("node.lock");
+    let port_flag = if port == 9200 {
+        String::new()
+    } else {
+        format!(" --port {port}")
+    };
     let pid: u32 = std::fs::read_to_string(&lock).ok()?.trim().parse().ok()?;
     let dir = data_dir.display();
     match probe(pid) {
         PidState::Dead => Some(format!(
             "The node that last served this port used data dir {dir}; its pid {pid} \
              (recorded in {}) is no longer running, so it exited or was killed. \
-             Restart it with the same --data-dir: xerj --data-dir {dir} (add --insecure \
-             if it ran that way).",
+             Restart it with the same --data-dir: xerj --data-dir {dir}{port_flag} (add \
+             --insecure if it ran that way).",
             lock.display()
         )),
         PidState::Alive => Some(format!(
@@ -198,6 +210,7 @@ mod tests {
         assert!(hint.contains("pid 4242"), "{hint}");
         assert!(hint.contains("is no longer running"), "{hint}");
         assert!(hint.contains("xerj --data-dir "), "{hint}");
+        assert!(hint.contains(" --port 9207 "), "{hint}");
         let canon = std::fs::canonicalize(data.path()).unwrap();
         assert!(hint.contains(&canon.display().to_string()), "{hint}");
     }

@@ -3762,7 +3762,7 @@ mod tests {
     fn node_not_listening_carries_the_stale_node_lock_hint() {
         let data = tempfile::tempdir().unwrap();
         std::fs::write(data.path().join("node.lock"), "4242").unwrap();
-        let hint = xerj_common::nodedir::node_lock_hint(data.path(), &|_| {
+        let hint = xerj_common::nodedir::node_lock_hint(data.path(), 9200, &|_| {
             xerj_common::nodedir::PidState::Dead
         });
         let msg = node_not_listening_with(
