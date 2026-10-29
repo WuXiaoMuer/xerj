@@ -83,10 +83,18 @@ ink, yellow and ochre (`landing/brand.html`), copied into `TOKENS` in `covers.py
 | `route` | corpus-hub-v2 | 251 packs, the 14 catalogue corpora, a question routed to lz4 |
 | `budget` | rc99-smart-autoindex-harness-tools | eight squares for the 8 GiB tier, two of them the 2 GiB memtable budget; eight small squares for the 8 MiB document ceiling; one outlined square for JSON streamed past 64 MiB |
 | `fieldgate` | autoindex-search-performance-improvements | 28 filled squares (people) and 217 small empty rings (agent field reports: 169 through the xerj.org API, 48 on GitHub), the squares joined by hairlines to 454 empty cells (rc.99's indices for one folder), beside 32 yellow cells (the dataset cap) at the same pitch; a gate of ink posts around Elasticsearch 9.05 and Lucene 25.4 MiB/s columns, an ochre floor at 0.5x Elasticsearch, and one empty yellow cell for XERJ's pending gate number |
-| `milestone` | 100-contributors | a 10x10 wall of 100 yellow cells (contributors on GitHub, 2026-10-29) beside a field of 7,226 small ink cells (Corpus Hub contributors, hub.xerj.org/contributors/, same day) |
 
 Inks: yellow fill (with ochre for its labels and hairlines) for the one
 result the post is about, grey-blue (day `--z-cmp`) for the comparison series
 and never for XERJ, ink for structure, and mute/line for annotation and empty
 cells. Every motif is built from squares on a grid: `dot()` draws a filled
 cell, `ring()` an empty one.
+
+## Milestone posters
+
+A POSTS entry that sets `poster` skips the motif and renders `poster.py`
+instead: the headline numbers in Big Shoulders Display over the repository's
+real star curve (`data/xerj-stargazers.json`, every page of the stargazers
+API). The hero keeps its numbers, because a milestone cover is the numbers.
+Re-read `stargazers_count` and set the entry's `stars` right before you render.
+Used by `100-contributors`.
