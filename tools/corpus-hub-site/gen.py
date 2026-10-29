@@ -1532,6 +1532,9 @@ def render_index(corpora, g7, graded, impact, prov, people=None):
     stars_stat = (f'<div class="stat" title="{stars:,} GitHub stars, summed over {n_star_repos:,} distinct pinned repositories '
                   f'that have a recorded star count"><b>{contributors.compact(stars)}</b><span>GitHub stars across pinned repos</span></div>'
                   if n_star_repos else "")
+    # owner, 2026-10-29: show the repository count (8,1xx) next to the people count (7,2xx): one person can contribute
+    # several repositories. Replaces the "11 domains" tile; the domains are the treemap groups right below.
+    n_repos = len({w["repo_url"].rstrip("/").lower() for pp in (people or {}).values() for w in pp["work"].values() if w.get("repo_url")})
     body = f'''<main>
 <div class="kicker"><span class="accent">HUB.XERJ.ORG</span><span class="dash">·</span><span>REFERENCE MEMORY HUB FOR AI AGENTS</span></div>
 <div class="herorow">
@@ -1544,7 +1547,7 @@ that loads one works like a domain expert.</p>
 <div class="heroside">
 <div class="statgrid">
 {stars_stat}
-<div class="stat"><b>{len(CATS)}</b><span>domains</span></div>
+<div class="stat" title="distinct repositories pinned on the hub, each credited to the person who contributed it"><a href="contributors/"><b>{n_repos:,}</b><span>contributed repositories</span></a></div>
 <div class="stat"><a href="contributors/"><b>{len(people or {}):,}</b><span>contributors</span></a></div>
 <div class="stat"><b>{human_bytes(total_bytes)}</b><span>pinned text</span></div>
 </div>
