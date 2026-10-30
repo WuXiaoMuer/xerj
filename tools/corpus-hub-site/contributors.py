@@ -1263,6 +1263,7 @@ def generate(out, hub_dir, page, esc, live_slugs, registry=None, people=None, up
     stats = collections.Counter()
     lastmod = {} if lastmod is None else lastmod
     fetched, gh = repo_pages.load_stats()
+    seen = repo_pages.load_seen()
     # repo pages: one repository per candidate corpus (exploit-pocs aggregates are registry pages, never here)
     pocs = {repo_pages.key(r.get("url")) for c in registry or [] if c["slug"].startswith("exploit-pocs")
             for r in c.get("repos") or []}
@@ -1325,7 +1326,9 @@ def generate(out, hub_dir, page, esc, live_slugs, registry=None, people=None, up
                         candidate_body(slug, e, esc, people), rel="../", path=f"/corpus/{slug}")
         else:
             lv, rp = related.pick(slug, f["lang"], f["topics"], exclude={slug})
-            body, ld = repo_pages.repo_body(f, esc, people, cats, (lv, rp), fetched)
+            why = repo_pages.weak(f, seen)
+            extra = "" if why else repo_pages.enrich_html(f, esc, people, cats, pages, fetched)
+            body, ld = repo_pages.repo_body(f, esc, people, cats, (lv, rp), fetched, extra=extra)
             dates = [x for x in [(f["w"].get("agreed") or "")[:10], fetched if f["st"] else ""] if re.match(r"^\d{4}-\d{2}-\d{2}$", x)]
             if dates and isinstance(ld, dict):
                 ld["dateModified"] = max(dates)
@@ -1335,8 +1338,11 @@ def generate(out, hub_dir, page, esc, live_slugs, registry=None, people=None, up
             rs = reg_of.get(repo_pages.key(f["url"]))
             ttl = repo_pages.title(f["repo"], f"the repository behind the {rs} corpus") if rs else repo_pages.repo_title(f)
             html = page(ttl, dsc, body + REPO_JS, rel="../", path=f"/corpus/{slug}",
-                        ld_extra=ld, og_title=f"{f['repo']} on XERJ Hub")
+                        ld_extra=ld, og_title=f"{f['repo']} on XERJ Hub", noindex=bool(why))
             stats["repo pages"] += 1
+            stats["repo pages noindexed (weak)" if why else "repo pages enriched"] += 1
+            if why:
+                stats["weak: " + why] += 1
             stats["repo pages with GitHub stats"] += bool(f["st"])
             dates = [x for x in [(f["w"].get("agreed") or "")[:10], fetched if f["st"] else ""] if re.match(r"^\d{4}-\d{2}-\d{2}$", x)]
             if dates:
@@ -1363,5 +1369,7 @@ def generate(out, hub_dir, page, esc, live_slugs, registry=None, people=None, up
         (d / f"{stem}.html").write_text(html)
     print(f"contributors: {stats['indexable']} indexable, {stats['thin']} thin (noindex), {stats['x posts']} X posts; "
           f"repo pages: {stats['repo pages']}, {stats['repo pages with GitHub stats']} with GitHub stats, "
-          f"{stats['skipped: in an exploit-pocs collection']} skipped (in an exploit-pocs collection)")
+          f"{stats['skipped: in an exploit-pocs collection']} skipped (in an exploit-pocs collection); "
+          f"{stats['repo pages enriched']} enriched, {stats['repo pages noindexed (weak)']} noindexed as weak "
+          f"({', '.join(f'{k[6:]}: {v}' for k, v in sorted(stats.items()) if k.startswith('weak: '))})")
     return len(people)

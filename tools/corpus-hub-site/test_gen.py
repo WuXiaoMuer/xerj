@@ -402,6 +402,30 @@ class RepoPagesTest(unittest.TestCase):
         self.assertIn("xerj autoindex ./b --url http://127.0.0.1:9200 --prefix b", p)
         self.assertIn("xerj autoindex map", p)
 
+    def test_weak_threshold_and_guides(self):
+        def f(stars, commits, files, slug="a--b", topics=(), langs=(), shelf=""):
+            st = {"commits": commits, "languages": list(langs)} if commits is not None else {}
+            return dict(slug=slug, st=st, stars=stars, tree={"files": files, "bytes": 1000} if files else None,
+                        topics=list(topics), langs=[l for l, _ in langs], short="b", repo="a/b", shelf=shelf,
+                        sha="f" * 40, spdx="MIT", w={"reviewed": True})
+        self.assertIn("no GitHub facts", repo_pages.weak(f(None, None, None)))
+        self.assertIn("commits", repo_pages.weak(f(2, 5, 500)))
+        self.assertIn("files", repo_pages.weak(f(2, 500, 10)))
+        self.assertEqual(repo_pages.weak(f(5, 1, 1)), "")
+        self.assertEqual(repo_pages.weak(f(0, 50, 50)), "")
+        self.assertEqual(repo_pages.weak(f(0, 1, 1), seen={"a--b"}), "")
+        g = repo_pages.guides(f(9, 9, 3000, topics=["mcp"], langs=[("PHP", 90.0)]))
+        urls = [u for u, _, _ in g]
+        self.assertEqual(len(g), 4)
+        self.assertTrue(all(u.startswith(("https://xerj.org/answers/", "https://xerj.org/compare/")) for u in urls))
+        self.assertIn("https://xerj.org/answers/code-search-mcp-for-claude-code", urls)
+        self.assertEqual(g[0][2], "b is tagged mcp on GitHub.")
+        for u, label in repo_pages.GUIDE.values():
+            self.assertNotIn("\u2014", label)
+        lic = repo_pages.licence_text(dict(f(9, 9, 9), st={"licence": "Apache-2.0"}), html.escape, "2026-10-29")
+        self.assertIn("but the LICENSE file", lic)
+        self.assertIn("2026-10-29", lic)
+
     def test_candidates_reads_author_manifests(self):
         with tempfile.TemporaryDirectory() as d:
             (pathlib.Path(d) / "candidates" / "authors").mkdir(parents=True)
@@ -1179,6 +1203,35 @@ class BuiltSiteDiscoverabilityTest(SiteLinksTest):
             walk(json.loads(b))
         self.assertTrue({"Dataset", "SoftwareSourceCode", "BreadcrumbList", "Person"} <= types, types)
 
+    def test_weak_repo_pages_are_noindexed_and_left_out_of_the_sitemap(self):
+        sm = set(re.findall(r"<loc>https://hub.xerj.org/corpus/([^<]+)</loc>", (self.out / "sitemap-repos.xml").read_text()))
+        seen = repo_pages.load_seen()
+        noindexed = enriched = 0
+        for f in (self.out / "corpus").glob("*--*.html"):
+            h = f.read_text()
+            if 'class="rp"' not in h:
+                continue
+            head = h.split("</head>", 1)[0]
+            if '<meta name="robots" content="noindex,follow">' in head:
+                noindexed += 1
+                self.assertNotIn(f.stem, sm, f.stem)
+                self.assertNotIn(f.stem, seen, f.stem)
+                self.assertNotIn("Using XERJ with", h)
+            else:
+                enriched += 1
+                self.assertIn(f.stem, sm, f.stem)
+                self.assertIn("<h2>Contributors</h2>", h, f.stem)
+                self.assertRegex(h, r'href="https://xerj.org/(answers|compare)/', f.stem)
+                self.assertNotIn("\u2014", h.split("<h2>Inside the indexed corpus</h2>", 1)[-1])
+        self.assertGreater(enriched, 0)
+        h = (self.out / "corpus/jacobjoergensen--laravel-paper.html").read_text()
+        for s in ("Inside the indexed corpus", "Licence on GitHub and in the corpus", "Using XERJ with laravel-paper",
+                  "https://xerj.org/answers/audit-php-codebase-with-an-index"):
+            self.assertIn(s, h, s)
+        # contributor and registry corpus pages are never noindexed by this rule
+        self.assertNotIn('content="noindex', (self.out / "contributors/JacobJoergensen.html").read_text().split("</head>", 1)[0])
+        self.assertNotIn('content="noindex', (self.out / "corpus/exploit-pocs-2024.html").read_text().split("</head>", 1)[0])
+
     def test_no_repo_pages_for_the_exploit_poc_aggregates(self):
         reg = {c["slug"]: c for c in gen.load_registry()}
         pocs = {repo_pages.key(r["url"]) for s, c in reg.items() if s.startswith("exploit-pocs") for r in c["repos"]}
@@ -1274,6 +1327,7 @@ class BuiltSiteDiscoverabilityTest(SiteLinksTest):
         self.assertEqual(len(table), 237)
         restored = [r for r in table if r["restored"] == "yes"]
         withheld = [r for r in table if r["restored"] == "no"]
+        weak_restored = []
         self.assertEqual(len(restored), 200, len(restored))
         self.assertEqual(len(withheld), 37)
         authors = gen.HUB / "candidates" / "authors"
@@ -1341,8 +1395,14 @@ class BuiltSiteDiscoverabilityTest(SiteLinksTest):
             self.assertIn(f'href="../contributors/{login}"', corpus)
             loc = f"https://hub.xerj.org/corpus/{slug}"
             # A slug that is already a live registry corpus is listed with the
-            # corpora sitemap. Every other restored corpus is a repo page.
-            self.assertTrue(loc in sm_repos or loc in sm_corpora, slug)
+            # corpora sitemap. Every other restored corpus is a repo page, and a
+            # repo page that falls under the weak threshold (repo_pages.weak) is
+            # noindex,follow and left out of the sitemap like any other.
+            if 'content="noindex,follow"' in corpus.split("</head>", 1)[0]:
+                self.assertNotIn(loc, sm_repos, slug)
+                weak_restored.append(slug)
+            else:
+                self.assertTrue(loc in sm_repos or loc in sm_corpora, slug)
             # Thin contributor pages are noindex and stay out of the sitemap.
             # The corpus page above is the indexable URL for that work.
             if "noindex" not in person.split("</head>", 1)[0]:
@@ -1367,6 +1427,8 @@ class BuiltSiteDiscoverabilityTest(SiteLinksTest):
                 self.assertNotIn("G4", src["review"]["note"], slug)
                 self.assertIn("agreed by email", corpus, slug)
                 self.assertIn(consent["at"][:10], corpus, slug)
+        # The weak rule is a backstop for small repos, not a way to drop the restores.
+        self.assertLess(len(weak_restored), len(restored) // 2, weak_restored)
 
     def test_issue_2310_corpora_link_contributors_and_carry_seo(self):
         """r2r-mcp, r2r-enforce and admission-compare (Thneoly/r2r-jev, #2310)
