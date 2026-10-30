@@ -3,7 +3,7 @@
  "cloned_at": null,
  "status": "draft",
  "shelf": "WEB",
- "domain": "an agent working on TypeScript queries this for how qiyangdev/minimal-expo-starter implements it: A minimal Expo SDK 57 starter for native iOS and Android apps, featuring Expo Router native tabs and @expo/ui (selected work: src/app, the project root)",
+ "domain": "an agent working on TypeScript queries this for how qiyangdev/minimal-expo-starter implements it: A minimal Expo SDK 58 starter for native iOS and Android apps, featuring Expo Router native tabs and @expo/ui (selected work: src/app, the project root)",
  "repos": [
   {
    "repo": "minimal-expo-starter",
