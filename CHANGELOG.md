@@ -41,7 +41,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `xerj autoindex --fresh` over an already-indexed folder no longer pays one
+  edges-index search, bulk and refresh per replaced file (and again per
+  superseded anchor) to soft-invalidate prior relationship edges. The graph
+  phase now invalidates them in batched, terms-sliced sweeps with one refresh
+  per sweep. On a 1,050-file markdown corpus with 14,724 prior edges the
+  `--fresh` run went from 152.0 s to 26.7 s (edges refreshes 1,052 → 3), with
+  the same 14,724 edges invalidated (#2640).
+
 - `xerj_batch_search` (and `xerj batch-search`): a batch whose combined `_msearch` response passes the 32 MiB cap no longer fails every item. The request is retried in halves, and only an item whose own response is over the cap fails, with `response_too_large`. (#2694)
+
 - `xerj autoindex` and `xerj autoindex map`: when the node is unreachable at a `localhost` URL, the error now also suggests the same URL with `127.0.0.1`, since the node binds the IPv4 loopback by default and `localhost` can resolve to `::1` first (seen on Windows). (#2688)
 - The node binds its ES-compat and REST listeners before it opens its
   indices, and on plain-HTTP ports answers every request with
