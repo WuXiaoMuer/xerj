@@ -8,15 +8,15 @@
   {
    "repo": "Lead-Management-System",
    "url": "https://github.com/Tuhin-SnapD/Lead-Management-System",
-   "sha": "092c7a20ec81ae4ac13582fc239b62503ab90e6a",
-   "licence": "author's permission (LICENSE at pin 092c7a20ec81: NONE; repository: none)",
+   "sha": "e79dcdd0a45a66c3995ea04784af64ea8e79cf7b",
+   "licence": "author's permission (LICENSE at pin e79dcdd0a45a: NONE; repository: none)",
    "review": {
     "spdx": "NONE",
     "use": "adapt-with-attribution",
     "by": "author-consent",
     "at": "2026-10-29T18:30Z",
     "consent_receipt": "7c38b3b27945",
-    "note": "Inclusion consented by the repository owner, signed in with GitHub on hub.xerj.org/add, at 2026-10-29T18:30Z (receipt 7c38b3b27945); pinned to the default-branch head. LICENSE at pin 092c7a20ec81: NONE (repository: none); used with the author's permission, with attribution."
+    "note": "Inclusion consented by the repository owner, signed in with GitHub on hub.xerj.org/add, at 2026-10-29T18:30Z (receipt 7c38b3b27945); pinned to the default-branch head. LICENSE at pin e79dcdd0a45a: NONE (repository: none); used with the author's permission, with attribution."
    }
   }
  ]

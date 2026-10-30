@@ -3,7 +3,7 @@
  "cloned_at": null,
  "status": "draft",
  "shelf": "API",
- "domain": "an agent working on C# queries this for how bagabeer/BagaGame-Launcher implements it: Lightweight and smart game launcher featuring auto-scan, time tracking, automatic series grouping, and automated cover art fetching (selected work: Themes, installer, Controls)",
+ "domain": "an agent working on c-sharp, fluent-design, game-launcher-software queries this for how bagabeer/BagaGame-Launcher implements it: Lightweight and smart game launcher featuring auto-scan, time tracking, automatic series grouping, and automated cover art fetching (selected work: Themes, installer, Controls)",
  "repos": [
   {
    "repo": "BagaGame-Launcher",
