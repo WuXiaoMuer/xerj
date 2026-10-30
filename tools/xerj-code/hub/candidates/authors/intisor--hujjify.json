@@ -1,9 +1,9 @@
 {
- "corpus": "intisor--alify",
+ "corpus": "intisor--hujjify",
  "cloned_at": null,
  "status": "draft",
  "shelf": "API",
- "domain": "an agent working on C# queries this for how intisor/Alify implements it: Alify - make music safe (selected work: Alify.Core, Alify.Spotify, tests)",
+ "domain": "an agent working on C# queries this for how intisor/Hujjify implements it: Alify - make music safe (selected work: Alify.Core, Alify.Spotify, tests)",
  "repos": [
   {
    "repo": "Alify",
